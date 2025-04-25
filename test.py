@@ -84,8 +84,8 @@ def prepareMincore(params, client: DefaultApi, setting, func, func_param, par_sn
     else:
         mincore = 100
     invoc = faasnap.Invocation(func_name=func.name, ss_id=base_snap.ss_id, params=func_param, mincore=mincore, mincore_size=setting.mincore_size, enable_reap=False, namespace='fc%d'%1, use_mem_file=True)
-    ret = client.invocations_post(invocation=invoc)
-    newVmID = ret['vmId']
+    ret = client.invocations_post(invocation=invoc).to_dict()
+    newVmID = ret['vm_id']
     print('prepare invoc ret:', ret)
     ret = client.invocations_post(invocation=faasnap.Invocation(func_name='run', vm_id=newVmID, params="{\"args\":\"echo 8 > /proc/sys/vm/drop_caches\"}", mincore=-1, enable_reap=False)) # disable sanitizing
     warm_snap = client.snapshots_post(snapshot=faasnap.Snapshot(vm_id=newVmID, snapshot_type='Full', snapshot_path=params.test_dir+'/Warm.snapshot', mem_file_path=params.test_dir+'/Warm.memfile', version='0.23.0', **vars(setting.record_regions)))
@@ -118,10 +118,10 @@ def prepareReap(params, client: DefaultApi, setting, func, func_param, idx):
     client.snapshots_ss_id_patch(ss_id=base_snap.ss_id, state=vars(setting.patch_state)) # drop cache
     time.sleep(1)
     invoc = faasnap.Invocation(func_name=func.name, ss_id=base_snap.ss_id, params=func_param, mincore=-1, enable_reap=True, ws_file_direct_io=True, namespace='fc%d'%1)
-    ret = client.invocations_post(invocation=invoc)
+    ret = client.invocations_post(invocation=invoc).to_dict()
     print('2nd prepare invoc ret:', ret)
     time.sleep(1)
-    client.vms_vm_id_delete(vm_id=ret['vmId'])
+    client.vms_vm_id_delete(vm_id=ret['vm_id'])
     time.sleep(2)
     client.snapshots_ss_id_patch(ss_id=base_snap.ss_id, state=vars(setting.patch_state)) # drop cache
     client.snapshots_ss_id_reap_patch(ss_id=base_snap.ss_id, cache=False) # drop reap cache
@@ -143,7 +143,7 @@ def prepareEmuMincore(params, client: DefaultApi, setting, func, func_param):
     ret = client.invocations_post(invocation=invoc)
     print('2nd prepare invoc ret:', ret)
     time.sleep(1)
-    client.vms_vm_id_delete(vm_id=ret['vmId'])
+    client.vms_vm_id_delete(vm_id=ret['vm_id'])
     time.sleep(2)
     client.snapshots_ss_id_reap_patch(ss_id=snapshot.ss_id, cache=False) # drop reap cache
     client.snapshots_ss_id_mincore_patch(ss_id=snapshot.ss_id, state=vars(setting.patch_mincore))
@@ -163,7 +163,7 @@ def invoke(args):
     if setting.invoke_steps == "vanilla":
         invoc = faasnap.Invocation(func_name=func.name, ss_id=ss_id, params=func_param, mincore=-1, enable_reap=False, namespace='fc%d'%idx, **vars(setting.invocation))
     elif setting.invoke_steps == "mincore":
-        mcstate = clients[idx].snapshots_ss_id_mincore_get(ss_id=ss_id)
+        mcstate = clients[idx].snapshots_ss_id_mincore_get(ss_id=ss_id).to_dict()
         invoc = faasnap.Invocation(func_name=func.name, ss_id=ss_id, params=func_param, mincore=-1, load_mincore=[n + 1 for n in range(mcstate['nlayers'])], enable_reap=False, namespace='fc%d'%idx, **vars(setting.invocation))
     elif setting.invoke_steps == "reap":
         invoc = faasnap.Invocation(func_name=func.name, ss_id=ss_id, params=func_param, mincore=-1, enable_reap=True, ws_single_read=True, namespace='fc%d'%idx)
@@ -177,12 +177,12 @@ def invoke(args):
         bpfpipe = subprocess.Popen(['bpftrace', '-e', program], cwd='/tmp/', stdout=bpffile, stderr=subprocess.STDOUT)
         time.sleep(3)
 
-    ret = clients[idx].invocations_post(invocation=invoc)
+    ret = clients[idx].invocations_post(invocation=invoc).to_dict()
     if bpfpipe:
         bpfpipe.terminate()
         bpfpipe.wait()
-    clients[idx].vms_vm_id_delete(vm_id=ret['vmId'])
-    trace_id = ret['traceId']
+    clients[idx].vms_vm_id_delete(vm_id=ret['vm_id'])
+    trace_id = ret['trace_id']
     print('invoke', runId, 'ret:', ret)
     time.sleep(2)
     if RESULT_DIR:
@@ -251,12 +251,12 @@ def invoke_warm(args):
         print('==== %s ====' % runId, file=bpffile, flush=True)
         bpfpipe = subprocess.Popen(['bpftrace', '-e', program], cwd='/tmp/', stdout=bpffile, stderr=subprocess.STDOUT)
         time.sleep(3)
-    ret = client.invocations_post(invocation=invoc)
+    ret = client.invocations_post(invocation=invoc).to_dict()
     if BPF:
         bpfpipe.terminate()
         bpfpipe.wait()
     print('2nd invoc ret:', ret)
-    trace_id = ret['traceId']
+    trace_id = ret['trace_id']
     client.vms_vm_id_delete(vm_id=vm_id)
     time.sleep(2)
     if RESULT_DIR:
