@@ -16,24 +16,33 @@ The guest kernels are in https://github.com/ucsdsysnet/faasnap-kernel.
     - The built executable will be in `build/cargo_target/x86_64-unknown-linux-musl/release/firecracker`
 1. Build guest kernels:
     - Clone https://github.com/ucsdsysnet/faasnap-kernel
-    - Launch a docker instance: `docker run -it --rm -v "$(pwd)":/workspace -w /workspace ubuntu:18.04 /bin/bash`
-    - install packages: 
-```
-apt-get update && apt-get install -y \
-  build-essential \
-  libncurses-dev \
-  bison \
-  flex \
-  libssl-dev \
-  libelf-dev \
-  bc \
-  cpio \
-  wget \
-  git
-```
-    - use the provided sample config: `cp sample.config .config`
-    - build: `make -j $(nproc)`
-    - repeat the process without the "FaaSnap sanitizing page" commit to build the vanilla vmlinux
+    - Launch a Docker container:
+      ```
+      docker run -it --rm -v "$(pwd)":/workspace -w /workspace ubuntu:18.04 /bin/bash
+      ```
+    - Install required packages:
+      ```
+      apt-get update && apt-get install -y \
+        build-essential \
+        libncurses-dev \
+        bison \
+        flex \
+        libssl-dev \
+        libelf-dev \
+        bc \
+        cpio \
+        wget \
+        git
+      ```
+    - Use the provided sample config:
+      ```
+      cp sample.config .config
+      ```
+    - Build the kernel:
+      ```
+      make -j$(nproc)
+      ```
+    - Repeat the build process from a clean clone, omitting the "FaaSnap sanitizing page" commit, to produce a vanilla `vmlinux`.
 
 1. Build function rootfs.
     - Build rootfs image. `pushd rootfs && make debian-rootfs.ext4 && popd`
