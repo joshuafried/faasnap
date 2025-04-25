@@ -20,7 +20,6 @@ vmlinux.bin
 main
 .env
 # Swagger generated
-cmd
 kernel
 models
 restapi/*
