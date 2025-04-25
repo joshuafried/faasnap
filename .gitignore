@@ -22,7 +22,5 @@ main
 # Swagger generated
 kernel
 models
-restapi/*
-!restapi/configure_faasnap.go
 
 swagger-codegen-cli-2.4.26.jar 
