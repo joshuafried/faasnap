@@ -6,7 +6,7 @@ DEBIAN_VERSION=${1}
 sudo umount ./mountpoint || true
 sudo rm -rf ./mountpoint
 mkdir -p ./mountpoint
-dd if=/dev/zero of=.debian-base-rootfs.ext4 bs=2M count=4096
+dd if=/dev/zero of=.debian-base-rootfs.ext4 bs=2M count=8192
 mkfs.ext4 .debian-base-rootfs.ext4
 
 sudo mount .debian-base-rootfs.ext4 mountpoint
