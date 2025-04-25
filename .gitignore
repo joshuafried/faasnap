@@ -21,6 +21,5 @@ main
 .env
 # Swagger generated
 kernel
-models
 
 swagger-codegen-cli-2.4.26.jar 
