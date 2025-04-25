@@ -11,7 +11,7 @@ The guest kernels are in https://github.com/ucsdsysnet/faasnap-kernel.
 # Setup
 ## Build
 1. Build Firecracker:
-    - Clone https://github.com/ucsdsysnet/faasnap-firecracker
+    - Clone https://github.com/joshuafried/faasnap-firecracker
     - `tools/devtool build --release`
     - The built executable will be in `build/cargo_target/x86_64-unknown-linux-musl/release/firecracker`
 1. Build guest kernels:
