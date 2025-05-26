@@ -174,13 +174,13 @@ func (vc *VMController) StartVM(ctx *context.Context, function, kernel, image, n
 	conf := &VmConfig{
 		BootSource: BootSource{
 			KernelImagePath: kernel,
-			BootArgs:        "reboot=k panic=1 pci=off random.trust_cpu=on i8042.nokbd i8042.noaux",
+			BootArgs:        "rw reboot=k panic=1 pci=off random.trust_cpu=on i8042.nokbd i8042.noaux",
 		},
 		Drives: []Drive{{
 			DriveId:      "rootfs",
 			PathOnHost:   image,
 			IsRootDevice: true,
-			IsReadOnly:   true,
+			IsReadOnly:   false,
 		}},
 		MachineConfig: MachineConfig{
 			VcpuCount:       vcpu,
