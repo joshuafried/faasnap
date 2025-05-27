@@ -1,7 +1,7 @@
 .PHONY: all clean
 
 DIST=debian
-DEBIAN_VERSION=buster # buster-slim
+DEBIAN_VERSION=noble
 GUESTFILES := $(wildcard guest/*)
 
 all:
