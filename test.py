@@ -34,7 +34,6 @@ PAUSE = None
 TESTID = None
 RESULT_DIR = None
 BPF = None
-os.umask(0o777)
 
 def addNetwork(client: DefaultApi, idx: int):
     ns = 'fc%d' % idx
@@ -207,7 +206,8 @@ def run_snap(params, setting, par, par_snap, func, record_input, test_input):
         clients[idx] = faasnap.DefaultApi(faasnap.ApiClient(conf))
         addNetwork(clients[idx], idx)
     client = clients[1]
-    client.functions_post(function=faasnap.Function(func_name=func.name, image=func.image, kernel=setting.kernel, vcpu=params.vcpu))
+    client.functions_post(function=faasnap.Function
+                          (func_name=func.name, image=func.image, kernel=setting.kernel, vcpu=params.vcpu, mem_size=params.memSize))
 
     params0 = func.params[record_input]
     params1 = func.params[test_input]
@@ -320,7 +320,9 @@ if __name__ == '__main__':
     if not RESULT_DIR:
         print("no RESULT_DIR set, will not save results")
     else:
-        os.makedirs('%s/%s' % (RESULT_DIR, TESTID), mode=0o777, exist_ok=True)
+        full_path = f'{RESULT_DIR}/{TESTID}'
+        os.makedirs(full_path, mode=0o777, exist_ok=True)
+        os.system(f"ln -sfn {full_path} {RESULT_DIR}/faasnap.recent")
     BPF = os.environ.get('BPF', None)
     with open(sys.argv[1], 'r') as f:
         params = json.load(f, object_hook=lambda d: SimpleNamespace(**d))
@@ -347,9 +349,10 @@ if __name__ == '__main__':
     print("par_snapshots:", params.par_snapshots)
     print("kernels:", params.faasnap.kernels)
     print("vcpu:", params.vcpu)
+    print("memSize:", params.memSize)
     print("record input:", params.record_input)
     print("test input:", params.test_input)
-    
+
     for func in params.function:
         for setting in params.setting:
             for par, par_snap in zip(params.parallelism, params.par_snapshots):
