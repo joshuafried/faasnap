@@ -431,18 +431,25 @@ func (vc *VMController) LoadSnapshot(r *http.Request, snapshot *Snapshot, invoc 
 		vmId string
 		vm   *VM
 		err  error
+		wg   sync.WaitGroup
 	)
 
+	// invoc.Async
+
 	if snapshot.mincoreLayers != nil {
+		if invoc.WsSingleRead && invoc.UseWsFile {
+			wg.Add(1)
+		}
 		go func() {
 			if invoc.UseWsFile {
-				if true {
-					snapshot.loadOnce.Do(func() {
-						if err := snapshot.loadWsFile(r.Context()); err != nil {
-							log.Println(err)
-						}
-					})
+				if invoc.WsSingleRead {
+					defer wg.Done()
 				}
+				snapshot.loadOnce.Do(func() {
+					if err := snapshot.loadWsFile(r.Context()); err != nil {
+						log.Println(err)
+					}
+				})
 			} else {
 				snapshot.loadOnce.Do(func() {
 					if err := snapshot.loadMincore(r.Context(), invoc.LoadMincore, false); err != nil {
@@ -451,6 +458,9 @@ func (vc *VMController) LoadSnapshot(r *http.Request, snapshot *Snapshot, invoc 
 				})
 			}
 		}()
+		if invoc.WsSingleRead && invoc.UseWsFile {
+			wg.Wait()
+		}
 	}
 
 	vc.Lock()
