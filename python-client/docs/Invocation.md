@@ -12,6 +12,7 @@ Name | Type | Description | Notes
 **load_mincore** | **list[int]** |  | [optional] 
 **use_mem_file** | **bool** |  | [optional] 
 **overlay_regions** | **bool** |  | [optional] 
+**sched_trace_pid** | **int** |  | [optional] 
 **use_ws_file** | **bool** |  | [optional] 
 **vmm_load_ws** | **bool** |  | [optional] 
 **enable_reap** | **bool** |  | [optional] 

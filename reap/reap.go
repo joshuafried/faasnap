@@ -86,3 +86,7 @@ func Activate(req *http.Request, id string) error {
 	}
 	return mmanager.Activate(req.Context(), id)
 }
+
+func GetWSRegions(ctx context.Context, vmId string) [][]int {
+	return mmanager.GetWSRegions(ctx, vmId)
+}

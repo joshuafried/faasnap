@@ -36,7 +36,7 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
-
+	"strings"
 	"github.com/ucsdsysnet/faasnap/models"
 	"github.com/ucsdsysnet/faasnap/reap"
 	"github.com/ucsdsysnet/faasnap/restapi/operations"
@@ -179,7 +179,7 @@ func Setup(s *http.Server, scheme, addr string) *DaemonState {
 // }
 
 func CreateFunction(params operations.PostFunctionsParams) error {
-	return fnManager.CreateFunction(*params.Function.FuncName, params.Function.Kernel, params.Function.Image, int(params.Function.Vcpu), int(params.Function.MemSize))
+	return fnManager.CreateFunction(*params.Function.FuncLang, *params.Function.FuncName, params.Function.Kernel, params.Function.Image, int(params.Function.Vcpu), int(params.Function.MemSize))
 }
 
 func StartVM(req *http.Request, name, ssId, namespace string) (string, error) {
@@ -194,7 +194,7 @@ func DoStartVM(ctx context.Context, function, namespace string) (string, error) 
 	_, span := trace.StartSpan(ctx, fmt.Sprintf("doStartVM_%v", function))
 	defer span.End()
 	if fn, ok := fnManager.Functions[function]; ok {
-		if id, err := vmController.StartVM(&ctx, fn.Name, fn.Kernel, fn.Image, namespace, fn.Vcpu, fn.MemSize); err != nil {
+		if id, err := vmController.StartVM(&ctx, fn.Lang, fn.Name, fn.Kernel, fn.Image, namespace, fn.Vcpu, fn.MemSize); err != nil {
 			return "", err
 		} else {
 			return id, nil
@@ -213,6 +213,53 @@ func StartVMM(ctx context.Context, enableReap bool, namespace string) (string, e
 	_, span := trace.StartSpan(ctx, "start_vmm")
 	defer span.End()
 	return vmController.StartVMM(ctx, enableReap, namespace)
+}
+
+func RegisterSnapshot(req *http.Request, ssId string, vmID string, snapshotType string, snapshotPath string, memFilePath string, version string, recordRegions bool, sizeThreshold, intervalThreshold int) (string, error) {
+	vmController.Lock()
+	vm, ok := vmController.Machines[vmID]
+	vmController.Unlock()
+
+	if !ok {
+		log.Println("vmID not exists: ", vmID)
+		return "", errors.New("vmID not exists")
+	}
+	if snapshotType == "" || snapshotPath == "" || memFilePath == "" || version == "" {
+		return "", errors.New("snapshot configs incomplete")
+	}
+
+	log.Println("registered snapshot at ", memFilePath)
+
+	snap := &Snapshot{
+		SnapshotId:     ssId,
+		Function:       vm.Function,
+		SnapshotBase:   ssManager.config.BasePath + "/" + ssId,
+		SnapshotType:   snapshotType,
+		MemFilePath:    memFilePath,
+		SnapshotPath:   snapshotPath,
+		Version:        version,
+		overlayRegions: map[int]int{},
+		wsRegions:      [][]int{},
+		loadOnce:       new(sync.Once),
+	}
+
+	var err error
+
+	if err := ssManager.RegisterSnapshot(snap); err != nil {
+		return "", err
+	}
+	log.Println("snap.SnapshotId:", snap.SnapshotId)
+
+	if recordRegions {
+
+		log.Println("recording regions in register snapshot")
+		if err = snap.RecordRegions(req.Context(), sizeThreshold, intervalThreshold); err != nil {
+			log.Println("RecordRegions failed: ", err)
+			return "", err
+		}
+	}
+
+	return snap.SnapshotId, nil
 }
 
 func TakeSnapshot(req *http.Request, vmID string, snapshotType string, snapshotPath string, memFilePath string, version string, recordRegions bool, sizeThreshold, intervalThreshold int) (string, error) {
@@ -242,6 +289,12 @@ func TakeSnapshot(req *http.Request, vmID string, snapshotType string, snapshotP
 	}
 
 	var err error
+
+	// if err = vmController.GetFunctionPid(req, vmID); err != nil {
+	// 	log.Println("getpid failed: ", err)
+	// 	return "", err
+	// }
+
 	if err = vmController.TakeSnapshot(req, vmID, snap); err != nil {
 		log.Println("snapshot failed: ", err)
 		return "", err
@@ -253,6 +306,7 @@ func TakeSnapshot(req *http.Request, vmID string, snapshotType string, snapshotP
 	log.Println("snap.SnapshotId:", snap.SnapshotId)
 
 	if recordRegions {
+		log.Println("recording regions")
 		if err = snap.RecordRegions(req.Context(), sizeThreshold, intervalThreshold); err != nil {
 			log.Println("RecordRegions failed: ", err)
 			return "", err
@@ -265,12 +319,13 @@ func TakeSnapshot(req *http.Request, vmID string, snapshotType string, snapshotP
 func LoadSnapshot(req *http.Request, invoc *models.Invocation, reapId string) (string, error) {
 	snapshot, ok := ssManager.Snapshots[invoc.SsID]
 	if !ok {
-		log.Println("snapshot not exists")
-		return "", errors.New("snapshot not exists")
+		log.Println("BCWH snapshot not exists")
+		return "", errors.New("BCWH snapshot not exists")
 	}
+
 	vmID, err := vmController.LoadSnapshot(req, snapshot, invoc, reapId)
 	if err != nil {
-		log.Println("load snapshot failed")
+		log.Printf("load snapshot failed %v", err)
 		return "", err
 	}
 
@@ -301,11 +356,16 @@ func InvokeFunction(req *http.Request, invoc *models.Invocation) (string, string
 	var finished chan bool
 	var scan bool
 	var reapId string
+	var restored bool
 	span := trace.FromContext(req.Context())
 	traceId := span.SpanContext().TraceID.String()
+	defer span.End()
+	log.Printf("INVOKE FUNCTION %v\n", req)
 
+	restored = false
 	switch {
 	case invoc.VMID != "":
+		log.Println("GET VMID")
 		// warm start
 		var ok bool
 		vmController.Lock()
@@ -329,9 +389,10 @@ func InvokeFunction(req *http.Request, invoc *models.Invocation) (string, string
 		if invoc.EnableReap {
 			reapId, err = reap.Register(req.Context(), invoc.SsID, snapshot.SnapshotBase, snapshot.SnapshotPath, snapshot.MemFilePath, snapshot.Size, invoc.WsFileDirectIo, invoc.WsSingleRead)
 			if err != nil {
-				log.Println("Register REAP failed", err.Error())
+				// log.Println("Register REAP failed", err.Error())
 				return "", "", traceId, err
 			}
+
 			go func() {
 				err := reap.Activate(req, reapId)
 				if err != nil {
@@ -339,19 +400,26 @@ func InvokeFunction(req *http.Request, invoc *models.Invocation) (string, string
 				}
 				resultChan <- err
 			}()
+
+			// log.Println("ACTIVATED REAP")
+
 			if vm, err = LoadSnapshot(req, invoc, reapId); err != nil {
 				log.Println("Snapshot start invocation failed")
 				return "", "", traceId, err
 			}
+
+			restored = true
 			if err := <-resultChan; err != nil {
 				return "", "", traceId, err
 			}
 			vmController.Machines[vm].ReapId = reapId
 		} else {
+			log.Println("LOADED GENERIC SNAPSHOT")
 			if vm, err = LoadSnapshot(req, invoc, ""); err != nil {
 				log.Println("Snapshot start invocation failed")
 				return "", "", traceId, err
 			}
+			restored = true
 		}
 	default:
 		// cold start
@@ -383,10 +451,39 @@ func InvokeFunction(req *http.Request, invoc *models.Invocation) (string, string
 		}()
 	}
 
-	resp, err := vmController.InvokeFunction(req, vm, *invoc.FuncName, invoc.Params)
+	resp, err := vmController.InvokeFunction(req, vm, invoc.FuncLang, *invoc.FuncName, invoc.Params, restored)
 	if err != nil {
 		return "", "", traceId, err
 	}
+
+	if restored && invoc.EnableSchedTrace {
+		log.Printf("COLD: %v\n", resp)
+
+		vmController.Lock()
+		machine, _ := vmController.Machines[vm]
+		vmController.Unlock()
+
+		data := "{\"action_type\": \"FlushMetrics\"}"
+		req, err = http.NewRequest("PUT", "http://localhost/actions", strings.NewReader(data))
+		if err != nil {
+			log.Println(err)
+			return "", "", traceId, err
+		}
+		req.Header.Add("Accept", "application/json")
+		req.Header.Add("Content-Type", "application/json")
+		_, span = trace.StartSpan(req.Context(), "flush_metrics")
+		_, err = machine.httpc.Do(req)
+		span.End()
+		time.Sleep(1 * time.Second)
+	}
+
+
+	// _, err := vmController.InvokeFunction(req, vm, *invoc.FuncName, invoc.Params)
+	// if err != nil {
+	// 	return "", "", traceId, err
+	// }
+
+	// log.Printf("WARM: %v\n", resp_warm)
 
 	// if enableReap {
 	// 	go func() {

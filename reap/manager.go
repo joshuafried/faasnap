@@ -32,6 +32,7 @@ import (
 	"strconv"
 	"sync"
 	"time"
+	"sort"
 
 	"github.com/ease-lab/vhive/metrics"
 	log "github.com/sirupsen/logrus"
@@ -172,7 +173,7 @@ func (m *MemoryManager) Activate(ctx context.Context, vmID string) error {
 
 	logger := log.WithFields(log.Fields{"vmID": vmID})
 
-	logger.Debug("Activating instance in the memory manager")
+	logger.Info("Activating instance in the memory manager")
 
 	var (
 		ok      bool
@@ -207,11 +208,46 @@ func (m *MemoryManager) Activate(ctx context.Context, vmID string) error {
 
 	state.setupStateOnActivate()
 
-	go state.pollUserPageFaults(readyCh)
+	logger.Info("polling page faults")
+
+	go state.pollUserPageFaults(ctx, readyCh)
 
 	<-readyCh
 
 	return nil
+}
+
+func (m *MemoryManager) GetWSRegions(ctx context.Context, vmID string) [][]int {
+	log.Println("GetWSRegions")
+	m.Lock()
+
+	regions := [][]int{}
+	state, ok := m.instances[vmID]
+	if !ok {
+		return regions
+	}
+	m.Unlock()
+
+	if state.isRecordReady && !state.IsLazyMode {
+		trace := state.trace
+		offsets := make([]uint64, 0, len(trace.regions))
+		for off := range trace.regions {
+			offsets = append(offsets, off)
+		}
+
+		sort.Slice(offsets, func(i, j int) bool {
+			return offsets[i] < offsets[j]
+		})
+
+		for _, off := range offsets {
+			paddr := off // already an address
+			len := uint64(trace.regions[off]) // in pages
+			regions = append(regions, []int{int(paddr >> 12), int(len)})
+			fmt.Printf("ws region 0x%x - 0x%x\n", paddr, paddr + len)
+		}
+	}
+
+	return regions
 }
 
 // FetchState Fetches the working set file (or the whole guest memory) and the VMM state file
@@ -284,6 +320,7 @@ func (m *MemoryManager) Deactivate(vmID string) ([]uint64, error) {
 	}
 
 	state.quitCh <- 0
+
 	if err := state.unmapGuestMemory(); err != nil {
 		logger.Error("Failed to munmap guest memory")
 		return nil, err
@@ -296,6 +333,7 @@ func (m *MemoryManager) Deactivate(vmID string) ([]uint64, error) {
 	state.processMetrics()
 
 	state.userFaultFD.Close()
+
 	if !state.isRecordReady && !state.IsLazyMode {
 		state.trace.ProcessRecord(state.GuestMemPath, state.WorkingSetPath)
 	}

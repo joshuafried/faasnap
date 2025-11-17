@@ -31,6 +31,7 @@ import (
 )
 
 type Function struct {
+	Lang    string `json:"lang"`
 	Name    string `json:"name"`
 	Kernel  string `json:"kernel"`
 	Image   string `json:"image"`
@@ -51,7 +52,7 @@ func NewFunctionManager(config *Config) *FunctionManager {
 	}
 }
 
-func (fm *FunctionManager) CreateFunction(name string, kernel string, image string, vcpu, memSize int) error {
+func (fm *FunctionManager) CreateFunction(lang string, name string, kernel string, image string, vcpu, memSize int) error {
 	fm.Lock()
 	defer fm.Unlock()
 
@@ -81,6 +82,7 @@ func (fm *FunctionManager) CreateFunction(name string, kernel string, image stri
 		memSize = 2048
 	}
 	newFunc := &Function{
+		Lang:    lang,
 		Name:    name,
 		Kernel:  kernelPath,
 		Image:   imagePath,

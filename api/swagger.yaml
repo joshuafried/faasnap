@@ -19,8 +19,11 @@ definitions:
   Function:
     type: object
     required:
+      - func_lang
       - func_name
     properties:
+      func_lang:
+        type: string
       func_name:
         type: string
       image:
@@ -72,6 +75,8 @@ definitions:
     required:
       - func_name
     properties:
+      func_lang:
+        type: string
       func_name:
         type: string
       vmId:
@@ -91,7 +96,17 @@ definitions:
           type: integer
       use_mem_file:
         type: boolean
+      trace_gfns:
+        type: array
+        items:
+          type: integer
       overlay_regions:
+        type: boolean
+      sched_trace_pid:
+        type: integer
+      enable_sched_trace:
+        type: boolean
+      enable_mem_trace:
         type: boolean
       use_ws_file:
         type: boolean
@@ -102,6 +117,8 @@ definitions:
       wsFileDirectIo:
         type: boolean
       wsSingleRead:
+        type: boolean
+      prefetch:
         type: boolean
       namespace:
         type: string

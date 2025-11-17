@@ -48,6 +48,7 @@ import (
 	"github.com/ease-lab/vhive/metrics"
 
 	"unsafe"
+	"go.opencensus.io/trace"
 )
 
 // SnapshotStateCfg Config to initialize SnapshotState
@@ -71,6 +72,7 @@ type SnapshotStateCfg struct {
 type SnapshotState struct {
 	SnapshotStateCfg
 	firstPageFaultOnce *sync.Once // to initialize the start virtual address and replay
+	firstOutsideFaultOnce *sync.Once
 	startAddress       uint64
 	userFaultFD        *os.File
 	trace              *Trace
@@ -123,6 +125,7 @@ func (s *SnapshotState) setupStateOnActivate() {
 	s.isActive = true
 	s.isEverActivated = true
 	s.firstPageFaultOnce = new(sync.Once)
+	s.firstOutsideFaultOnce = new(sync.Once)
 	s.quitCh = make(chan int)
 
 	if s.metricsModeOn {
@@ -134,7 +137,7 @@ func (s *SnapshotState) setupStateOnActivate() {
 
 func (s *SnapshotState) getUFFD() error {
 	var d net.Dialer
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10000*time.Second)
 	defer cancel()
 
 	for {
@@ -301,26 +304,34 @@ func (s *SnapshotState) fetchState() error {
 	return nil
 }
 
-func (s *SnapshotState) pollUserPageFaults(readyCh chan int) {
+func (s *SnapshotState) pollUserPageFaults(ctx context.Context, readyCh chan int) {
 	logger := log.WithFields(log.Fields{"vmID": s.VMID})
 
 	var events [1]syscall.EpollEvent
+	// uffd_time := int64(0)
 
 	s.registerEpoller()
 
-	logger.Debug("Starting polling loop")
+	logger.Info("Starting polling loop")
 
 	defer syscall.Close(s.epfd)
 
 	readyCh <- 0
 
+	logger.Info("after readyCh")
+
 	for {
 		select {
 		case <-s.quitCh:
-			logger.Debug("Handler received a signal to quit")
+			logger.Info("Handler received a signal to quit")
+			// logger.Infof("uffd time = %vus", uffd_time)
 			return
 		default:
-			nevents, err := syscall.EpollWait(s.epfd, events[:], -1)
+			nevents, err := syscall.EpollWait(s.epfd, events[:], 50)
+			if nevents == 0 {
+				continue // timed out
+			}
+			// start_pf := time.Now()
 			if err != nil {
 				if err == syscall.EINTR {
 					continue // Retry if interrupted
@@ -332,7 +343,19 @@ func (s *SnapshotState) pollUserPageFaults(readyCh chan int) {
 			if nevents < 1 {
 				panic("Wrong number of events")
 			}
+			// _, span := trace.StartSpan(ctx, "handle_page_fault")
 
+			// var ts unix.Timespec
+			// err = unix.ClockGettime(unix.CLOCK_MONOTONIC, &ts)
+			// time.Sleep(2 * time.Millisecond)
+			// log.Infof("just slept")
+			// if err != nil {
+			// 	log.Infof("failed to get time")
+			// }
+
+			// nanos := ts.Sec*1e9 + int64(ts.Nsec)
+
+			// log.Error("begin page fault")
 			for i := 0; i < nevents; i++ {
 				event := events[i]
 
@@ -359,10 +382,21 @@ func (s *SnapshotState) pollUserPageFaults(readyCh chan int) {
 
 				address := binary.LittleEndian.Uint64(goMsg[16:])
 
-				if err := s.servePageFault(fd, address); err != nil {
+				if err := s.servePageFault(ctx, fd, address); err != nil {
 					log.Fatalf("Failed to serve page fault")
 				}
 			}
+
+			// uffd_time += time.Since(start_pf).Microseconds()
+			// err = unix.ClockGettime(unix.CLOCK_MONOTONIC, &ts)
+			// if err != nil {
+			// 	log.Infof("failed to get time")
+			// }
+
+			// nanos = ts.Sec*1e9 + int64(ts.Nsec)
+
+			// log.Error("end page fault")
+			// span.End()
 		}
 	}
 }
@@ -400,7 +434,7 @@ func (s *SnapshotState) registerEpoller() error {
 	return nil
 }
 
-func (s *SnapshotState) servePageFault(fd int, address uint64) error {
+func (s *SnapshotState) servePageFault(ctx context.Context, fd int, address uint64) error {
 	var (
 		tStart              time.Time
 		workingSetInstalled bool
@@ -414,7 +448,9 @@ func (s *SnapshotState) servePageFault(fd int, address uint64) error {
 				if s.metricsModeOn {
 					tStart = time.Now()
 				}
+				_, span := trace.StartSpan(ctx, "installWorkingSetPages")
 				s.installWorkingSetPages(fd)
+				span.End()
 				if s.metricsModeOn {
 					s.currentMetric.MetricMap[installWSMetric] = metrics.ToUS(time.Since(tStart))
 				}
@@ -423,9 +459,16 @@ func (s *SnapshotState) servePageFault(fd int, address uint64) error {
 			}
 		})
 
+
+
 	if workingSetInstalled {
-		return nil // what if the requested page is not in working set?
+		return nil
 	}
+
+	// s.firstOutsideFaultOnce.Do (
+	// 	func() {
+	// 		time.Sleep(100 * time.Millisecond)
+	// 	})
 
 	offset := address - s.startAddress
 

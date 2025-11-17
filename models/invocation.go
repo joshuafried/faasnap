@@ -22,6 +22,15 @@ type Invocation struct {
 	// enable reap
 	EnableReap bool `json:"enableReap,omitempty"`
 
+	// enable mem trace
+	EnableMemTrace bool `json:"enable_mem_trace,omitempty"`
+
+	// enable sched trace
+	EnableSchedTrace bool `json:"enable_sched_trace,omitempty"`
+
+	// func lang
+	FuncLang string `json:"func_lang,omitempty"`
+
 	// func name
 	// Required: true
 	FuncName *string `json:"func_name"`
@@ -44,8 +53,17 @@ type Invocation struct {
 	// params
 	Params string `json:"params,omitempty"`
 
+	// prefetch
+	Prefetch bool `json:"prefetch,omitempty"`
+
+	// sched trace pid
+	SchedTracePid int64 `json:"sched_trace_pid,omitempty"`
+
 	// ss Id
 	SsID string `json:"ssId,omitempty"`
+
+	// trace gfns
+	TraceGfns []int64 `json:"trace_gfns"`
 
 	// use mem file
 	UseMemFile bool `json:"use_mem_file,omitempty"`

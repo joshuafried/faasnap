@@ -85,12 +85,30 @@ func configureAPI(api *operations.FaasnapAPI) http.Handler {
 		// }
 		result, vmId, traceId, err := daemon.InvokeFunction(params.HTTPRequest, params.Invocation)
 		if err != nil {
+			log.Println("INVOKE FAILED")
 			return operations.NewPostInvocationsBadRequest().WithPayload(&operations.PostInvocationsBadRequestBody{Message: err.Error()})
 		}
+		log.Println("RETURNING SUCCESS")
 		return operations.NewPostInvocationsOK().WithPayload(&operations.PostInvocationsOKBody{
 			Duration: 0, VMID: vmId, Result: result, TraceID: traceId})
 	})
+
 	api.PostSnapshotsHandler = operations.PostSnapshotsHandlerFunc(func(params operations.PostSnapshotsParams) middleware.Responder {
+		if params.Snapshot.SsID != "" {
+			ssId, err := daemon.RegisterSnapshot(params.HTTPRequest, params.Snapshot.SsID, *params.Snapshot.VMID,
+				params.Snapshot.SnapshotType, params.Snapshot.SnapshotPath,
+				params.Snapshot.MemFilePath, params.Snapshot.Version, params.Snapshot.RecordRegions,
+				int(params.Snapshot.SizeThreshold), int(params.Snapshot.IntervalThreshold))
+
+			if err != nil {
+				return &operations.PostSnapshotsBadRequest{Payload: &operations.PostSnapshotsBadRequestBody{Message: err.Error()}}
+			}
+			ret := *params.Snapshot
+			ret.SsID = ssId
+			return &operations.PostSnapshotsOK{Payload: &ret}
+		}
+
+
 		ssId, err := daemon.TakeSnapshot(params.HTTPRequest, *params.Snapshot.VMID, params.Snapshot.SnapshotType, params.Snapshot.SnapshotPath,
 			params.Snapshot.MemFilePath, params.Snapshot.Version, params.Snapshot.RecordRegions, int(params.Snapshot.SizeThreshold), int(params.Snapshot.IntervalThreshold))
 		if err != nil {

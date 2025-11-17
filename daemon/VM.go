@@ -27,6 +27,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strconv"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -38,7 +39,6 @@ import (
 	"sync"
 	"syscall"
 	"time"
-
 	"github.com/ucsdsysnet/faasnap/models"
 	"github.com/ucsdsysnet/faasnap/reap"
 	"go.opencensus.io/trace"
@@ -83,6 +83,7 @@ type VM struct {
 	sync.Mutex
 	VmId        string    `json:"vmId"`
 	Function    string    `json:"function"`
+	FunctionPid uint16    `json:"function_pid"`
 	State       string    `json:"state"`
 	Socket      string    `json:"socket"`
 	VMNetwork   *Network  `json:"net"`
@@ -93,6 +94,7 @@ type VM struct {
 	process     *os.Process
 	httpc       *http.Client
 	Snapshot    *Snapshot
+	invoked     bool
 }
 
 func (vm *VM) Dial() error {
@@ -139,6 +141,7 @@ type VMController struct {
 	Machines map[string]*VM      `json:"machines"`
 	Networks map[string]*Network `json:"netInterfaces"`
 	VMMPool  map[string]*VM      `json:"vmmPool"`
+	FunctionPid uint16           `json:"functionPid"`
 }
 
 func NewVMController(config *Config) *VMController {
@@ -149,6 +152,7 @@ func NewVMController(config *Config) *VMController {
 	vc.Machines = make(map[string]*VM)
 	vc.Networks = make(map[string]*Network)
 	vc.VMMPool = make(map[string]*VM)
+	vc.FunctionPid = 0
 	return vc
 }
 
@@ -165,7 +169,7 @@ func (vc *VMController) AddNetwork(req *http.Request, namespace, hostDevName, if
 	return nil
 }
 
-func (vc *VMController) StartVM(ctx *context.Context, function, kernel, image, namespace string, vcpu, memSize int) (string, error) {
+func (vc *VMController) StartVM(ctx *context.Context, lang, function, kernel, image, namespace string, vcpu, memSize int) (string, error) {
 	_, span := trace.StartSpan(*ctx, "startVM_setup")
 	netIface, ok := vc.Networks[namespace]
 	if !ok {
@@ -174,7 +178,7 @@ func (vc *VMController) StartVM(ctx *context.Context, function, kernel, image, n
 	conf := &VmConfig{
 		BootSource: BootSource{
 			KernelImagePath: kernel,
-			BootArgs:        "rw reboot=k panic=1 pci=off random.trust_cpu=on i8042.nokbd i8042.noaux",
+			BootArgs:        "rw reboot=k panic=1 pci=off random.trust_cpu=on i8042.nokbd i8042.noaux clocksource=tsc tsc=reliable",
 		},
 		Drives: []Drive{{
 			DriveId:      "rootfs",
@@ -224,6 +228,12 @@ func (vc *VMController) StartVM(ctx *context.Context, function, kernel, image, n
 		log.Println(err)
 		return "", err
 	}
+	logFile, err := os.Create(vmPath + "/log")
+	if err != nil {
+		log.Println(err)
+		return "", err
+	}
+	logFile.Close()
 	span.End()
 
 	cmd := &exec.Cmd{
@@ -236,6 +246,8 @@ func (vc *VMController) StartVM(ctx *context.Context, function, kernel, image, n
 			firecracker,
 			"--api-sock", apiSock,
 			"--config-file", configFile,
+			"--level", vc.config.LogLevel,
+			"--log-path", vmPath + "/log",
 		},
 		Stdout: outFile,
 		Stderr: errFile,
@@ -261,6 +273,7 @@ func (vc *VMController) StartVM(ctx *context.Context, function, kernel, image, n
 		VmConf:    conf,
 		VmPath:    vmPath,
 		process:   cmd.Process,
+		invoked:   false,
 	}
 
 	vc.Lock()
@@ -276,6 +289,36 @@ func (vc *VMController) StartVM(ctx *context.Context, function, kernel, image, n
 		delete(vc.Machines, vm.VmId)
 		vc.Unlock()
 	}(newVM)
+
+	log.Println("START VM")
+	// if !newVM.invoked {
+	// 	time.Sleep(5 * time.Second)
+	// 	newVM.invoked = true
+	// 	addr := newVM.VMNetwork.uniqueAddr+":25565"
+	// 	log.Println("Dialing for the first time")
+	// 	conn, err := net.Dial("tcp", addr)
+	// 	if err != nil {
+	// 		log.Printf("Failed to dial VM for the first time %v\n", err)
+	// 		return "", err
+	// 	}
+
+	// 	log.Println("Writing for the first time")
+	// 	_, err = conn.Write([]byte(lang))
+	// 	if err != nil {
+	// 		log.Println("Failed to write to VM socket")
+	// 		return "", err
+	// 	}
+
+	// 	// data, err := ioutil.ReadAll(conn)
+	// 	// if err != nil {
+	// 	// 	log.Println("error reading response", err)
+	// 	// 	return "", err
+	// 	// }
+	// 	// log.Printf("done starting function daemon %v\n", string(data))
+	// 	conn.Close()
+	// 	time.Sleep(5 * time.Second)
+	// }
+
 	return id, nil
 }
 
@@ -437,12 +480,13 @@ func (vc *VMController) LoadSnapshot(r *http.Request, snapshot *Snapshot, invoc 
 	// invoc.Async
 
 	if snapshot.mincoreLayers != nil {
-		if invoc.WsSingleRead && invoc.UseWsFile {
+		if invoc.WsSingleRead && invoc.UseWsFile && invoc.Prefetch {
 			wg.Add(1)
 		}
 		go func() {
-			if invoc.UseWsFile {
+			if invoc.UseWsFile && invoc.Prefetch {
 				if invoc.WsSingleRead {
+					fmt.Println("")
 					defer wg.Done()
 				}
 				snapshot.loadOnce.Do(func() {
@@ -450,7 +494,7 @@ func (vc *VMController) LoadSnapshot(r *http.Request, snapshot *Snapshot, invoc 
 						log.Println(err)
 					}
 				})
-			} else {
+			} else if invoc.Prefetch {
 				snapshot.loadOnce.Do(func() {
 					if err := snapshot.loadMincore(r.Context(), invoc.LoadMincore, false); err != nil {
 						log.Println(err)
@@ -458,7 +502,7 @@ func (vc *VMController) LoadSnapshot(r *http.Request, snapshot *Snapshot, invoc 
 				})
 			}
 		}()
-		if invoc.WsSingleRead && invoc.UseWsFile {
+		if invoc.WsSingleRead && invoc.UseWsFile && invoc.Prefetch {
 			wg.Wait()
 		}
 	}
@@ -494,11 +538,11 @@ func (vc *VMController) LoadSnapshot(r *http.Request, snapshot *Snapshot, invoc 
 
 	log.Println("VM pid:", vm.process.Pid)
 	// time.Sleep(20 * time.Second)
-	return vc.loadSnapshot(r.Context(), vm, snapshot, invoc, reapId)
+	return vc.loadSnapshot(r.Context(), vm, snapshot, invoc, reapId, vc.FunctionPid)
 
 }
 
-func (vc *VMController) loadSnapshot(ctx context.Context, vm *VM, snapshot *Snapshot, invoc *models.Invocation, reapId string) (string, error) {
+func (vc *VMController) loadSnapshot(ctx context.Context, vm *VM, snapshot *Snapshot, invoc *models.Invocation, reapId string, pid uint16) (string, error) {
 	var (
 		err       error
 		span      *trace.Span
@@ -516,6 +560,9 @@ func (vc *VMController) loadSnapshot(ctx context.Context, vm *VM, snapshot *Snap
 			WsFile               string      `json:"ws_file"`
 			WsRegions            map[int]int `json:"ws_regions"`
 			LoadWsFile           bool        `json:"load_ws"`
+			SchedTracePid        uint16        `json:"sched_trace_pid"`
+			EnableMemTrace      bool         `json:"enable_mem_trace"`
+			EnableSchedTrace      bool         `json:"enable_sched_trace"`
 		}{
 			SnapshotPath:         snapshot.SnapshotPath,
 			MemFilePath:          snapshot.MemFilePath,
@@ -525,6 +572,9 @@ func (vc *VMController) loadSnapshot(ctx context.Context, vm *VM, snapshot *Snap
 			OverlayRegions:       snapshot.overlayRegions,
 			WsFile:               snapshot.WsFile,
 			LoadWsFile:           invoc.VmmLoadWs,
+			SchedTracePid:        pid,
+			EnableMemTrace:       invoc.EnableMemTrace,
+			EnableSchedTrace:       invoc.EnableSchedTrace,
 		}
 		dataBytes, err = json.Marshal(params)
 		if err != nil {
@@ -543,6 +593,9 @@ func (vc *VMController) loadSnapshot(ctx context.Context, vm *VM, snapshot *Snap
 			WsFilePath           string      `json:"ws_file_path"`
 			WsRegions            [][]int     `json:"ws_regions"`
 			LoadWsFile           bool        `json:"load_ws"`
+			SchedTracePid        uint16       `json:"sched_trace_pid"`
+			EnableMemTrace       bool        `json:"enable_mem_trace"`
+			EnableSchedTrace      bool         `json:"enable_sched_trace"`
 			Fadvise              string      `json:"fadvise"`
 		}{
 			SnapshotPath:        snapshot.SnapshotPath,
@@ -550,10 +603,23 @@ func (vc *VMController) loadSnapshot(ctx context.Context, vm *VM, snapshot *Snap
 			OverlayRegions:      map[int]int{},
 			WsRegions:           [][]int{},
 			LoadWsFile:          invoc.VmmLoadWs,
+			SchedTracePid:       pid,
+			EnableMemTrace:      false, // invoc.EnableMemTrace,
+			EnableSchedTrace:      false, // invoc.EnableSchedTrace,
 		}
 		if invoc.EnableReap {
 			params.EnableUserPageFaults = true
 			params.SockFilePath = vc.config.BasePath + "/" + snapshot.SnapshotId + "/uffd-" + reapId + ".sock"
+			if invoc.EnableMemTrace {
+				// get trace
+				params.WsRegions = reap.GetWSRegions(ctx, reapId)
+
+				log.Printf("ws regions before %v\n", params.WsRegions)
+				for _, val := range invoc.TraceGfns {
+					params.WsRegions = append(params.WsRegions, []int{int(val), 1})
+				}
+				log.Printf("ws regions after %v\n", params.WsRegions)
+			}
 		}
 		if invoc.UseMemFile {
 			params.MemFilePath = snapshot.MemFilePath
@@ -594,6 +660,7 @@ func (vc *VMController) loadSnapshot(ctx context.Context, vm *VM, snapshot *Snap
 		log.Println(resp)
 		return "", errors.New("loading snapshot failed")
 	}
+
 
 	data := "{\"state\": \"Resumed\"}"
 	req, err = http.NewRequest("PATCH", "http://localhost/vm", strings.NewReader(data))
@@ -693,6 +760,7 @@ func (vc *VMController) startVMM(ctx context.Context, fcExecutable, namespace st
 		VmConf:    nil,
 		VmPath:    vmPath,
 		process:   cmd.Process,
+		invoked: false,
 	}
 
 	vc.Lock()
@@ -713,7 +781,58 @@ func (vc *VMController) startVMM(ctx context.Context, fcExecutable, namespace st
 	return newVM, nil
 }
 
-func (vc *VMController) InvokeFunction(r *http.Request, vmID string, function string, params string) (string, error) {
+func (vc *VMController) GetFunctionPid(r *http.Request, vmID string) error {
+	vc.Lock()
+	vm, ok := vc.Machines[vmID]
+	vc.Unlock()
+	if !ok {
+		log.Println("vmID ", vmID, " does not exist")
+		return errors.New("vmID does not exist")
+	}
+	client := &http.Client{}
+	url := fmt.Sprintf("%s://%s/getpid", "http", vm.VMNetwork.uniqueAddr+":5000")
+	newReq, err := http.NewRequest("POST", url, nil)
+	newReq.Header.Set("Content-Type", "application/json; charset=utf-8")
+	if err != nil {
+		log.Println(err)
+		return err
+	}
+	_, span := trace.StartSpan(r.Context(), "getpid")
+	resp, err := client.Do(newReq)
+	span.End()
+
+	if err != nil {
+		log.Println(err)
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 300 {
+		body, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			log.Println("read body failed", err)
+		}
+		s := string(body)
+		val, err := strconv.ParseUint(s, 10, 16)
+		if err != nil {
+			return err
+		}
+		vc.FunctionPid = uint16(val)
+		log.Println("got pid ", vc.FunctionPid)
+		return nil
+	} else {
+		log.Println("getpid response:", resp)
+		return errors.New("invoking failed")
+	}
+}
+
+var langDict = map[string]string{
+    "java":  "5001",
+    "python": "5000",
+	"c": "5002",
+	"node": "5003",
+}
+
+func (vc *VMController) InvokeFunction(r *http.Request, vmID string, lang string, function string, params string, restored bool) (string, error) {
 	vc.Lock()
 	vm, ok := vc.Machines[vmID]
 	vc.Unlock()
@@ -722,34 +841,87 @@ func (vc *VMController) InvokeFunction(r *http.Request, vmID string, function st
 		return "", errors.New("vmID not exists")
 	}
 
-	client := &http.Client{}
-	url := fmt.Sprintf("%s://%s/invoke?function=%s&redishost=%s&redispasswd=%s", "http", vm.VMNetwork.uniqueAddr+":5000", function, vc.config.RedisHost, vc.config.RedisPasswd)
-	log.Println("requesting ", url, " with params: ", params)
-	newReq, err := http.NewRequest("POST", url, bytes.NewReader([]byte(params)))
-	newReq.Header.Set("Content-Type", "application/json; charset=utf-8")
-	if err != nil {
-		log.Println(err)
-		return "", err
-	}
 	_, span := trace.StartSpan(r.Context(), "invoke_"+function)
-	resp, err := client.Do(newReq)
-	span.End()
+	defer span.End()
+
+	begin_tsc := Rdtsc()
+	// open tcp socket
+	//
+	// log.Println("Dialing VM server")
+	//
+	//
+	// time.Sleep(time.Duration(1000) * time.Millisecond)
+	_, span2 := trace.StartSpan(r.Context(), "flask_dial")
+
+	addr := vm.VMNetwork.uniqueAddr+":"+langDict[lang]
+	var conn net.Conn
+	var err error
+	for {
+		conn, err = net.Dial("tcp", addr)
+		if err != nil {
+			log.Printf("Failed to dial VM socket %v %v\n", addr, err)
+		} else {
+			break;
+		}
+	}
+
+	// defer conn.Close()
+
+	to_send := []byte(params)
+	// if restored {
+	// 	log.Println("SENDING ONE BYTE")
+	// 	to_send = []byte("")
+	// } else {
+	// 	log.Printf("SENDING %v\n", params)
+	// }
+	to_send = append(to_send, '\n')
+	_, err = conn.Write(to_send)
 	if err != nil {
-		log.Println(err)
+		log.Println("Failed to write to VM socket")
+	}
+	// log.Println("Reading VM server")
+
+	data, err := ioutil.ReadAll(conn)
+	if err != nil {
+		log.Println("error reading response", err)
 		return "", err
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode < 300 {
-		log.Println(function, "invoked")
-		body, err := ioutil.ReadAll(resp.Body)
+ 	// log.Printf("done reading VM server %s\n", string(data))
+
+	end_tsc := Rdtsc()
+
+	conn.Close()
+
+	_, span2 = trace.StartSpan(r.Context(), "flask_dial_2")
+
+	// log.Println("Writing VM server")
+	for {
+		conn, err = net.Dial("tcp", addr)
 		if err != nil {
-			log.Println("read body failed", err)
+			log.Printf("Failed to dial VM socket %v %v\n", addr, err)
+		} else {
+			break;
 		}
-		return string(body), nil
-	} else {
-		log.Println("invoking", function, "response:", resp)
-		return "", errors.New("invoking failed")
 	}
+
+	span2.End()
+	conn.Close()
+
+	type Resp struct {
+		Ret string `json:"ret"`
+		EndTsc uint64 `json:"end_tsc"`
+		BeginTsc uint64 `json:"begin_tsc"`
+	}
+
+	resp := Resp {
+		Ret: string(data),
+			EndTsc: end_tsc,
+			BeginTsc: begin_tsc,
+	}
+
+	json_data, err := json.Marshal(resp)
+
+	return string(json_data), nil
 }
 
 func (vm *VM) getDmesg(context context.Context) ([]byte, error) {

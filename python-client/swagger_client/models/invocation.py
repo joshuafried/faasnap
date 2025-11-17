@@ -33,6 +33,7 @@ class Invocation(object):
                             and the value is json key in definition.
     """
     swagger_types = {
+        'func_lang': 'str',
         'func_name': 'str',
         'vm_id': 'str',
         'ss_id': 'str',
@@ -41,16 +42,22 @@ class Invocation(object):
         'mincore_size': 'int',
         'load_mincore': 'list[int]',
         'use_mem_file': 'bool',
+        'trace_gfns': 'list[int]',
         'overlay_regions': 'bool',
+        'sched_trace_pid': 'int',
+        'enable_sched_trace': 'bool',
+        'enable_mem_trace': 'bool',
         'use_ws_file': 'bool',
         'vmm_load_ws': 'bool',
         'enable_reap': 'bool',
         'ws_file_direct_io': 'bool',
         'ws_single_read': 'bool',
+        'prefetch': 'bool',
         'namespace': 'str'
     }
 
     attribute_map = {
+        'func_lang': 'func_lang',
         'func_name': 'func_name',
         'vm_id': 'vmId',
         'ss_id': 'ssId',
@@ -59,21 +66,27 @@ class Invocation(object):
         'mincore_size': 'mincore_size',
         'load_mincore': 'loadMincore',
         'use_mem_file': 'use_mem_file',
+        'trace_gfns': 'trace_gfns',
         'overlay_regions': 'overlay_regions',
+        'sched_trace_pid': 'sched_trace_pid',
+        'enable_sched_trace': 'enable_sched_trace',
+        'enable_mem_trace': 'enable_mem_trace',
         'use_ws_file': 'use_ws_file',
         'vmm_load_ws': 'vmm_load_ws',
         'enable_reap': 'enableReap',
         'ws_file_direct_io': 'wsFileDirectIo',
         'ws_single_read': 'wsSingleRead',
+        'prefetch': 'prefetch',
         'namespace': 'namespace'
     }
 
-    def __init__(self, func_name=None, vm_id=None, ss_id=None, params=None, mincore=None, mincore_size=None, load_mincore=None, use_mem_file=None, overlay_regions=None, use_ws_file=None, vmm_load_ws=None, enable_reap=None, ws_file_direct_io=None, ws_single_read=None, namespace=None, _configuration=None):  # noqa: E501
+    def __init__(self, func_lang=None, func_name=None, vm_id=None, ss_id=None, params=None, mincore=None, mincore_size=None, load_mincore=None, use_mem_file=None, trace_gfns=None, overlay_regions=None, sched_trace_pid=None, enable_sched_trace=None, enable_mem_trace=None, use_ws_file=None, vmm_load_ws=None, enable_reap=None, ws_file_direct_io=None, ws_single_read=None, prefetch=None, namespace=None, _configuration=None):  # noqa: E501
         """Invocation - a model defined in Swagger"""  # noqa: E501
         if _configuration is None:
             _configuration = Configuration()
         self._configuration = _configuration
 
+        self._func_lang = None
         self._func_name = None
         self._vm_id = None
         self._ss_id = None
@@ -82,15 +95,22 @@ class Invocation(object):
         self._mincore_size = None
         self._load_mincore = None
         self._use_mem_file = None
+        self._trace_gfns = None
         self._overlay_regions = None
+        self._sched_trace_pid = None
+        self._enable_sched_trace = None
+        self._enable_mem_trace = None
         self._use_ws_file = None
         self._vmm_load_ws = None
         self._enable_reap = None
         self._ws_file_direct_io = None
         self._ws_single_read = None
+        self._prefetch = None
         self._namespace = None
         self.discriminator = None
 
+        if func_lang is not None:
+            self.func_lang = func_lang
         self.func_name = func_name
         if vm_id is not None:
             self.vm_id = vm_id
@@ -106,8 +126,16 @@ class Invocation(object):
             self.load_mincore = load_mincore
         if use_mem_file is not None:
             self.use_mem_file = use_mem_file
+        if trace_gfns is not None:
+            self.trace_gfns = trace_gfns
         if overlay_regions is not None:
             self.overlay_regions = overlay_regions
+        if sched_trace_pid is not None:
+            self.sched_trace_pid = sched_trace_pid
+        if enable_sched_trace is not None:
+            self.enable_sched_trace = enable_sched_trace
+        if enable_mem_trace is not None:
+            self.enable_mem_trace = enable_mem_trace
         if use_ws_file is not None:
             self.use_ws_file = use_ws_file
         if vmm_load_ws is not None:
@@ -118,8 +146,31 @@ class Invocation(object):
             self.ws_file_direct_io = ws_file_direct_io
         if ws_single_read is not None:
             self.ws_single_read = ws_single_read
+        if prefetch is not None:
+            self.prefetch = prefetch
         if namespace is not None:
             self.namespace = namespace
+
+    @property
+    def func_lang(self):
+        """Gets the func_lang of this Invocation.  # noqa: E501
+
+
+        :return: The func_lang of this Invocation.  # noqa: E501
+        :rtype: str
+        """
+        return self._func_lang
+
+    @func_lang.setter
+    def func_lang(self, func_lang):
+        """Sets the func_lang of this Invocation.
+
+
+        :param func_lang: The func_lang of this Invocation.  # noqa: E501
+        :type: str
+        """
+
+        self._func_lang = func_lang
 
     @property
     def func_name(self):
@@ -292,6 +343,27 @@ class Invocation(object):
         self._use_mem_file = use_mem_file
 
     @property
+    def trace_gfns(self):
+        """Gets the trace_gfns of this Invocation.  # noqa: E501
+
+
+        :return: The trace_gfns of this Invocation.  # noqa: E501
+        :rtype: list[int]
+        """
+        return self._trace_gfns
+
+    @trace_gfns.setter
+    def trace_gfns(self, trace_gfns):
+        """Sets the trace_gfns of this Invocation.
+
+
+        :param trace_gfns: The trace_gfns of this Invocation.  # noqa: E501
+        :type: list[int]
+        """
+
+        self._trace_gfns = trace_gfns
+
+    @property
     def overlay_regions(self):
         """Gets the overlay_regions of this Invocation.  # noqa: E501
 
@@ -311,6 +383,69 @@ class Invocation(object):
         """
 
         self._overlay_regions = overlay_regions
+
+    @property
+    def sched_trace_pid(self):
+        """Gets the sched_trace_pid of this Invocation.  # noqa: E501
+
+
+        :return: The sched_trace_pid of this Invocation.  # noqa: E501
+        :rtype: int
+        """
+        return self._sched_trace_pid
+
+    @sched_trace_pid.setter
+    def sched_trace_pid(self, sched_trace_pid):
+        """Sets the sched_trace_pid of this Invocation.
+
+
+        :param sched_trace_pid: The sched_trace_pid of this Invocation.  # noqa: E501
+        :type: int
+        """
+
+        self._sched_trace_pid = sched_trace_pid
+
+    @property
+    def enable_sched_trace(self):
+        """Gets the enable_sched_trace of this Invocation.  # noqa: E501
+
+
+        :return: The enable_sched_trace of this Invocation.  # noqa: E501
+        :rtype: bool
+        """
+        return self._enable_sched_trace
+
+    @enable_sched_trace.setter
+    def enable_sched_trace(self, enable_sched_trace):
+        """Sets the enable_sched_trace of this Invocation.
+
+
+        :param enable_sched_trace: The enable_sched_trace of this Invocation.  # noqa: E501
+        :type: bool
+        """
+
+        self._enable_sched_trace = enable_sched_trace
+
+    @property
+    def enable_mem_trace(self):
+        """Gets the enable_mem_trace of this Invocation.  # noqa: E501
+
+
+        :return: The enable_mem_trace of this Invocation.  # noqa: E501
+        :rtype: bool
+        """
+        return self._enable_mem_trace
+
+    @enable_mem_trace.setter
+    def enable_mem_trace(self, enable_mem_trace):
+        """Sets the enable_mem_trace of this Invocation.
+
+
+        :param enable_mem_trace: The enable_mem_trace of this Invocation.  # noqa: E501
+        :type: bool
+        """
+
+        self._enable_mem_trace = enable_mem_trace
 
     @property
     def use_ws_file(self):
@@ -416,6 +551,27 @@ class Invocation(object):
         """
 
         self._ws_single_read = ws_single_read
+
+    @property
+    def prefetch(self):
+        """Gets the prefetch of this Invocation.  # noqa: E501
+
+
+        :return: The prefetch of this Invocation.  # noqa: E501
+        :rtype: bool
+        """
+        return self._prefetch
+
+    @prefetch.setter
+    def prefetch(self, prefetch):
+        """Sets the prefetch of this Invocation.
+
+
+        :param prefetch: The prefetch of this Invocation.  # noqa: E501
+        :type: bool
+        """
+
+        self._prefetch = prefetch
 
     @property
     def namespace(self):

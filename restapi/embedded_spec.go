@@ -637,9 +637,13 @@ func init() {
     "Function": {
       "type": "object",
       "required": [
+        "func_lang",
         "func_name"
       ],
       "properties": {
+        "func_lang": {
+          "type": "string"
+        },
         "func_name": {
           "type": "string"
         },
@@ -666,6 +670,15 @@ func init() {
         "enableReap": {
           "type": "boolean"
         },
+        "enable_mem_trace": {
+          "type": "boolean"
+        },
+        "enable_sched_trace": {
+          "type": "boolean"
+        },
+        "func_lang": {
+          "type": "string"
+        },
         "func_name": {
           "type": "string"
         },
@@ -691,8 +704,20 @@ func init() {
         "params": {
           "type": "string"
         },
+        "prefetch": {
+          "type": "boolean"
+        },
+        "sched_trace_pid": {
+          "type": "integer"
+        },
         "ssId": {
           "type": "string"
+        },
+        "trace_gfns": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          }
         },
         "use_mem_file": {
           "type": "boolean"
@@ -1540,9 +1565,13 @@ func init() {
     "Function": {
       "type": "object",
       "required": [
+        "func_lang",
         "func_name"
       ],
       "properties": {
+        "func_lang": {
+          "type": "string"
+        },
         "func_name": {
           "type": "string"
         },
@@ -1569,6 +1598,15 @@ func init() {
         "enableReap": {
           "type": "boolean"
         },
+        "enable_mem_trace": {
+          "type": "boolean"
+        },
+        "enable_sched_trace": {
+          "type": "boolean"
+        },
+        "func_lang": {
+          "type": "string"
+        },
         "func_name": {
           "type": "string"
         },
@@ -1594,8 +1632,20 @@ func init() {
         "params": {
           "type": "string"
         },
+        "prefetch": {
+          "type": "boolean"
+        },
+        "sched_trace_pid": {
+          "type": "integer"
+        },
         "ssId": {
           "type": "string"
+        },
+        "trace_gfns": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          }
         },
         "use_mem_file": {
           "type": "boolean"
