@@ -207,7 +207,7 @@ func (m *MemoryManager) Activate(ctx context.Context, vmID string) error {
 
 	state.setupStateOnActivate()
 
-	go state.pollUserPageFaults(readyCh)
+	go state.pollUserPageFaults(ctx, readyCh)
 
 	<-readyCh
 

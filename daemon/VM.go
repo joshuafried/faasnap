@@ -93,6 +93,7 @@ type VM struct {
 	process     *os.Process
 	httpc       *http.Client
 	Snapshot    *Snapshot
+	invoked     bool
 }
 
 func (vm *VM) Dial() error {
@@ -165,7 +166,7 @@ func (vc *VMController) AddNetwork(req *http.Request, namespace, hostDevName, if
 	return nil
 }
 
-func (vc *VMController) StartVM(ctx *context.Context, function, kernel, image, namespace string, vcpu, memSize int) (string, error) {
+func (vc *VMController) StartVM(ctx *context.Context, lang, function, kernel, image, namespace string, vcpu, memSize int) (string, error) {
 	_, span := trace.StartSpan(*ctx, "startVM_setup")
 	netIface, ok := vc.Networks[namespace]
 	if !ok {
@@ -224,6 +225,12 @@ func (vc *VMController) StartVM(ctx *context.Context, function, kernel, image, n
 		log.Println(err)
 		return "", err
 	}
+	logFile, err := os.Create(vmPath + "/log")
+	if err != nil {
+		log.Println(err)
+		return "", err
+	}
+	logFile.Close()
 	span.End()
 
 	cmd := &exec.Cmd{
@@ -236,6 +243,8 @@ func (vc *VMController) StartVM(ctx *context.Context, function, kernel, image, n
 			firecracker,
 			"--api-sock", apiSock,
 			"--config-file", configFile,
+			"--level", vc.config.LogLevel,
+			"--log-path", vmPath + "/log",
 		},
 		Stdout: outFile,
 		Stderr: errFile,
@@ -261,6 +270,7 @@ func (vc *VMController) StartVM(ctx *context.Context, function, kernel, image, n
 		VmConf:    conf,
 		VmPath:    vmPath,
 		process:   cmd.Process,
+		invoked:   false,
 	}
 
 	vc.Lock()
@@ -437,12 +447,12 @@ func (vc *VMController) LoadSnapshot(r *http.Request, snapshot *Snapshot, invoc 
 	// invoc.Async
 
 	if snapshot.mincoreLayers != nil {
-		if invoc.WsSingleRead && invoc.UseWsFile {
+		if invoc.WsSingleRead && invoc.UseWsFile && invoc.Prefetch {
 			wg.Add(1)
 		}
 		go func() {
 			if invoc.UseWsFile {
-				if invoc.WsSingleRead {
+				if invoc.WsSingleRead && invoc.Prefetch {
 					defer wg.Done()
 				}
 				snapshot.loadOnce.Do(func() {
@@ -458,7 +468,7 @@ func (vc *VMController) LoadSnapshot(r *http.Request, snapshot *Snapshot, invoc 
 				})
 			}
 		}()
-		if invoc.WsSingleRead && invoc.UseWsFile {
+		if invoc.WsSingleRead && invoc.UseWsFile && invoc.Prefetch {
 			wg.Wait()
 		}
 	}
@@ -693,6 +703,7 @@ func (vc *VMController) startVMM(ctx context.Context, fcExecutable, namespace st
 		VmConf:    nil,
 		VmPath:    vmPath,
 		process:   cmd.Process,
+		invoked:   false,
 	}
 
 	vc.Lock()
@@ -713,7 +724,14 @@ func (vc *VMController) startVMM(ctx context.Context, fcExecutable, namespace st
 	return newVM, nil
 }
 
-func (vc *VMController) InvokeFunction(r *http.Request, vmID string, function string, params string) (string, error) {
+var langDict = map[string]string{
+	"python": "5000",
+	"java":   "5001",
+	"c":      "5002",
+	"node":   "5003",
+}
+
+func (vc *VMController) InvokeFunction(r *http.Request, vmID string, lang string, function string, params string, restored bool) (string, error) {
 	vc.Lock()
 	vm, ok := vc.Machines[vmID]
 	vc.Unlock()
@@ -722,34 +740,25 @@ func (vc *VMController) InvokeFunction(r *http.Request, vmID string, function st
 		return "", errors.New("vmID not exists")
 	}
 
-	client := &http.Client{}
-	url := fmt.Sprintf("%s://%s/invoke?function=%s&redishost=%s&redispasswd=%s", "http", vm.VMNetwork.uniqueAddr+":5000", function, vc.config.RedisHost, vc.config.RedisPasswd)
-	log.Println("requesting ", url, " with params: ", params)
-	newReq, err := http.NewRequest("POST", url, bytes.NewReader([]byte(params)))
-	newReq.Header.Set("Content-Type", "application/json; charset=utf-8")
-	if err != nil {
-		log.Println(err)
-		return "", err
-	}
 	_, span := trace.StartSpan(r.Context(), "invoke_"+function)
-	resp, err := client.Do(newReq)
-	span.End()
+	defer span.End()
+
+	addr := vm.VMNetwork.uniqueAddr + ":" + langDict[lang]
+	conn, err := net.Dial("tcp", addr)
+
+	to_send := []byte(params)
+	to_send = append(to_send, '\n')
+	_, err = conn.Write(to_send)
+
+	data, err := ioutil.ReadAll(conn)
 	if err != nil {
-		log.Println(err)
+		log.Println("error reading response", err)
 		return "", err
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode < 300 {
-		log.Println(function, "invoked")
-		body, err := ioutil.ReadAll(resp.Body)
-		if err != nil {
-			log.Println("read body failed", err)
-		}
-		return string(body), nil
-	} else {
-		log.Println("invoking", function, "response:", resp)
-		return "", errors.New("invoking failed")
-	}
+
+	conn.Close()
+
+	return string(data), nil
 }
 
 func (vm *VM) getDmesg(context context.Context) ([]byte, error) {

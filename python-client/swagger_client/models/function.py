@@ -33,6 +33,7 @@ class Function(object):
                             and the value is json key in definition.
     """
     swagger_types = {
+        'func_lang': 'str',
         'func_name': 'str',
         'image': 'str',
         'kernel': 'str',
@@ -41,6 +42,7 @@ class Function(object):
     }
 
     attribute_map = {
+        'func_lang': 'func_lang',
         'func_name': 'func_name',
         'image': 'image',
         'kernel': 'kernel',
@@ -48,12 +50,13 @@ class Function(object):
         'mem_size': 'mem_size'
     }
 
-    def __init__(self, func_name=None, image=None, kernel=None, vcpu=None, mem_size=None, _configuration=None):  # noqa: E501
+    def __init__(self, func_lang=None, func_name=None, image=None, kernel=None, vcpu=None, mem_size=None, _configuration=None):  # noqa: E501
         """Function - a model defined in Swagger"""  # noqa: E501
         if _configuration is None:
             _configuration = Configuration()
         self._configuration = _configuration
 
+        self._func_lang = None
         self._func_name = None
         self._image = None
         self._kernel = None
@@ -61,6 +64,7 @@ class Function(object):
         self._mem_size = None
         self.discriminator = None
 
+        self.func_lang = func_lang
         self.func_name = func_name
         if image is not None:
             self.image = image
@@ -70,6 +74,29 @@ class Function(object):
             self.vcpu = vcpu
         if mem_size is not None:
             self.mem_size = mem_size
+
+    @property
+    def func_lang(self):
+        """Gets the func_lang of this Function.  # noqa: E501
+
+
+        :return: The func_lang of this Function.  # noqa: E501
+        :rtype: str
+        """
+        return self._func_lang
+
+    @func_lang.setter
+    def func_lang(self, func_lang):
+        """Sets the func_lang of this Function.
+
+
+        :param func_lang: The func_lang of this Function.  # noqa: E501
+        :type: str
+        """
+        if self._configuration.client_side_validation and func_lang is None:
+            raise ValueError("Invalid value for `func_lang`, must not be `None`")  # noqa: E501
+
+        self._func_lang = func_lang
 
     @property
     def func_name(self):

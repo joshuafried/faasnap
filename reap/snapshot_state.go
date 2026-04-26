@@ -48,6 +48,8 @@ import (
 	"github.com/ease-lab/vhive/metrics"
 
 	"unsafe"
+
+	"go.opencensus.io/trace"
 )
 
 // SnapshotStateCfg Config to initialize SnapshotState
@@ -134,7 +136,7 @@ func (s *SnapshotState) setupStateOnActivate() {
 
 func (s *SnapshotState) getUFFD() error {
 	var d net.Dialer
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10000*time.Second)
 	defer cancel()
 
 	for {
@@ -301,7 +303,7 @@ func (s *SnapshotState) fetchState() error {
 	return nil
 }
 
-func (s *SnapshotState) pollUserPageFaults(readyCh chan int) {
+func (s *SnapshotState) pollUserPageFaults(ctx context.Context, readyCh chan int) {
 	logger := log.WithFields(log.Fields{"vmID": s.VMID})
 
 	var events [1]syscall.EpollEvent
@@ -320,7 +322,7 @@ func (s *SnapshotState) pollUserPageFaults(readyCh chan int) {
 			logger.Debug("Handler received a signal to quit")
 			return
 		default:
-			nevents, err := syscall.EpollWait(s.epfd, events[:], -1)
+			nevents, err := syscall.EpollWait(s.epfd, events[:], 50)
 			if err != nil {
 				if err == syscall.EINTR {
 					continue // Retry if interrupted
@@ -359,7 +361,7 @@ func (s *SnapshotState) pollUserPageFaults(readyCh chan int) {
 
 				address := binary.LittleEndian.Uint64(goMsg[16:])
 
-				if err := s.servePageFault(fd, address); err != nil {
+				if err := s.servePageFault(ctx, fd, address); err != nil {
 					log.Fatalf("Failed to serve page fault")
 				}
 			}
@@ -400,7 +402,7 @@ func (s *SnapshotState) registerEpoller() error {
 	return nil
 }
 
-func (s *SnapshotState) servePageFault(fd int, address uint64) error {
+func (s *SnapshotState) servePageFault(ctx context.Context, fd int, address uint64) error {
 	var (
 		tStart              time.Time
 		workingSetInstalled bool
@@ -414,7 +416,9 @@ func (s *SnapshotState) servePageFault(fd int, address uint64) error {
 				if s.metricsModeOn {
 					tStart = time.Now()
 				}
+				_, span := trace.StartSpan(ctx, "installWorkingSetPages")
 				s.installWorkingSetPages(fd)
+				span.End()
 				if s.metricsModeOn {
 					s.currentMetric.MetricMap[installWSMetric] = metrics.ToUS(time.Since(tStart))
 				}

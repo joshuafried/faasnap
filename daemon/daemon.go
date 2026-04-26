@@ -20,7 +20,6 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-
 package daemon
 
 import (
@@ -179,7 +178,7 @@ func Setup(s *http.Server, scheme, addr string) *DaemonState {
 // }
 
 func CreateFunction(params operations.PostFunctionsParams) error {
-	return fnManager.CreateFunction(*params.Function.FuncName, params.Function.Kernel, params.Function.Image, int(params.Function.Vcpu), int(params.Function.MemSize))
+	return fnManager.CreateFunction(*params.Function.FuncLang, *params.Function.FuncName, params.Function.Kernel, params.Function.Image, int(params.Function.Vcpu), int(params.Function.MemSize))
 }
 
 func StartVM(req *http.Request, name, ssId, namespace string) (string, error) {
@@ -194,7 +193,7 @@ func DoStartVM(ctx context.Context, function, namespace string) (string, error) 
 	_, span := trace.StartSpan(ctx, fmt.Sprintf("doStartVM_%v", function))
 	defer span.End()
 	if fn, ok := fnManager.Functions[function]; ok {
-		if id, err := vmController.StartVM(&ctx, fn.Name, fn.Kernel, fn.Image, namespace, fn.Vcpu, fn.MemSize); err != nil {
+		if id, err := vmController.StartVM(&ctx, fn.Lang, fn.Name, fn.Kernel, fn.Image, namespace, fn.Vcpu, fn.MemSize); err != nil {
 			return "", err
 		} else {
 			return id, nil
@@ -213,6 +212,53 @@ func StartVMM(ctx context.Context, enableReap bool, namespace string) (string, e
 	_, span := trace.StartSpan(ctx, "start_vmm")
 	defer span.End()
 	return vmController.StartVMM(ctx, enableReap, namespace)
+}
+
+func RegisterSnapshot(req *http.Request, ssId string, vmID string, snapshotType string, snapshotPath string, memFilePath string, version string, recordRegions bool, sizeThreshold, intervalThreshold int) (string, error) {
+	vmController.Lock()
+	vm, ok := vmController.Machines[vmID]
+	vmController.Unlock()
+
+	if !ok {
+		log.Println("vmID not exists: ", vmID)
+		return "", errors.New("vmID not exists")
+	}
+	if snapshotType == "" || snapshotPath == "" || memFilePath == "" || version == "" {
+		return "", errors.New("snapshot configs incomplete")
+	}
+
+	log.Println("registered snapshot at ", memFilePath)
+
+	snap := &Snapshot{
+		SnapshotId:     ssId,
+		Function:       vm.Function,
+		SnapshotBase:   ssManager.config.BasePath + "/" + ssId,
+		SnapshotType:   snapshotType,
+		MemFilePath:    memFilePath,
+		SnapshotPath:   snapshotPath,
+		Version:        version,
+		overlayRegions: map[int]int{},
+		wsRegions:      [][]int{},
+		loadOnce:       new(sync.Once),
+	}
+
+	var err error
+
+	if err := ssManager.RegisterSnapshot(snap); err != nil {
+		return "", err
+	}
+	log.Println("snap.SnapshotId:", snap.SnapshotId)
+
+	if recordRegions {
+
+		log.Println("recording regions in register snapshot")
+		if err = snap.RecordRegions(req.Context(), sizeThreshold, intervalThreshold); err != nil {
+			log.Println("RecordRegions failed: ", err)
+			return "", err
+		}
+	}
+
+	return snap.SnapshotId, nil
 }
 
 func TakeSnapshot(req *http.Request, vmID string, snapshotType string, snapshotPath string, memFilePath string, version string, recordRegions bool, sizeThreshold, intervalThreshold int) (string, error) {
@@ -301,8 +347,12 @@ func InvokeFunction(req *http.Request, invoc *models.Invocation) (string, string
 	var finished chan bool
 	var scan bool
 	var reapId string
+	var restored bool
 	span := trace.FromContext(req.Context())
 	traceId := span.SpanContext().TraceID.String()
+	defer span.End()
+
+	restored = false
 
 	switch {
 	case invoc.VMID != "":
@@ -343,6 +393,8 @@ func InvokeFunction(req *http.Request, invoc *models.Invocation) (string, string
 				log.Println("Snapshot start invocation failed")
 				return "", "", traceId, err
 			}
+
+			restored = true
 			if err := <-resultChan; err != nil {
 				return "", "", traceId, err
 			}
@@ -352,6 +404,7 @@ func InvokeFunction(req *http.Request, invoc *models.Invocation) (string, string
 				log.Println("Snapshot start invocation failed")
 				return "", "", traceId, err
 			}
+			restored = true
 		}
 	default:
 		// cold start
@@ -383,7 +436,7 @@ func InvokeFunction(req *http.Request, invoc *models.Invocation) (string, string
 		}()
 	}
 
-	resp, err := vmController.InvokeFunction(req, vm, *invoc.FuncName, invoc.Params)
+	resp, err := vmController.InvokeFunction(req, vm, invoc.FuncLang, *invoc.FuncName, invoc.Params, restored)
 	if err != nil {
 		return "", "", traceId, err
 	}

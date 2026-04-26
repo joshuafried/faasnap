@@ -33,6 +33,7 @@ class Invocation(object):
                             and the value is json key in definition.
     """
     swagger_types = {
+        'func_lang': 'str',
         'func_name': 'str',
         'vm_id': 'str',
         'ss_id': 'str',
@@ -47,10 +48,12 @@ class Invocation(object):
         'enable_reap': 'bool',
         'ws_file_direct_io': 'bool',
         'ws_single_read': 'bool',
+        'prefetch': 'bool',
         'namespace': 'str'
     }
 
     attribute_map = {
+        'func_lang': 'func_lang',
         'func_name': 'func_name',
         'vm_id': 'vmId',
         'ss_id': 'ssId',
@@ -65,15 +68,17 @@ class Invocation(object):
         'enable_reap': 'enableReap',
         'ws_file_direct_io': 'wsFileDirectIo',
         'ws_single_read': 'wsSingleRead',
+        'prefetch': 'prefetch',
         'namespace': 'namespace'
     }
 
-    def __init__(self, func_name=None, vm_id=None, ss_id=None, params=None, mincore=None, mincore_size=None, load_mincore=None, use_mem_file=None, overlay_regions=None, use_ws_file=None, vmm_load_ws=None, enable_reap=None, ws_file_direct_io=None, ws_single_read=None, namespace=None, _configuration=None):  # noqa: E501
+    def __init__(self, func_lang=None, func_name=None, vm_id=None, ss_id=None, params=None, mincore=None, mincore_size=None, load_mincore=None, use_mem_file=None, overlay_regions=None, use_ws_file=None, vmm_load_ws=None, enable_reap=None, ws_file_direct_io=None, ws_single_read=None, prefetch=None, namespace=None, _configuration=None):  # noqa: E501
         """Invocation - a model defined in Swagger"""  # noqa: E501
         if _configuration is None:
             _configuration = Configuration()
         self._configuration = _configuration
 
+        self._func_lang = None
         self._func_name = None
         self._vm_id = None
         self._ss_id = None
@@ -88,9 +93,12 @@ class Invocation(object):
         self._enable_reap = None
         self._ws_file_direct_io = None
         self._ws_single_read = None
+        self._prefetch = None
         self._namespace = None
         self.discriminator = None
 
+        if func_lang is not None:
+            self.func_lang = func_lang
         self.func_name = func_name
         if vm_id is not None:
             self.vm_id = vm_id
@@ -118,8 +126,31 @@ class Invocation(object):
             self.ws_file_direct_io = ws_file_direct_io
         if ws_single_read is not None:
             self.ws_single_read = ws_single_read
+        if prefetch is not None:
+            self.prefetch = prefetch
         if namespace is not None:
             self.namespace = namespace
+
+    @property
+    def func_lang(self):
+        """Gets the func_lang of this Invocation.  # noqa: E501
+
+
+        :return: The func_lang of this Invocation.  # noqa: E501
+        :rtype: str
+        """
+        return self._func_lang
+
+    @func_lang.setter
+    def func_lang(self, func_lang):
+        """Sets the func_lang of this Invocation.
+
+
+        :param func_lang: The func_lang of this Invocation.  # noqa: E501
+        :type: str
+        """
+
+        self._func_lang = func_lang
 
     @property
     def func_name(self):
@@ -416,6 +447,27 @@ class Invocation(object):
         """
 
         self._ws_single_read = ws_single_read
+
+    @property
+    def prefetch(self):
+        """Gets the prefetch of this Invocation.  # noqa: E501
+
+
+        :return: The prefetch of this Invocation.  # noqa: E501
+        :rtype: bool
+        """
+        return self._prefetch
+
+    @prefetch.setter
+    def prefetch(self, prefetch):
+        """Sets the prefetch of this Invocation.
+
+
+        :param prefetch: The prefetch of this Invocation.  # noqa: E501
+        :type: bool
+        """
+
+        self._prefetch = prefetch
 
     @property
     def namespace(self):

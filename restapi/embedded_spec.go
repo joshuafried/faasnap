@@ -637,9 +637,13 @@ func init() {
     "Function": {
       "type": "object",
       "required": [
+        "func_lang",
         "func_name"
       ],
       "properties": {
+        "func_lang": {
+          "type": "string"
+        },
         "func_name": {
           "type": "string"
         },
@@ -666,6 +670,9 @@ func init() {
         "enableReap": {
           "type": "boolean"
         },
+        "func_lang": {
+          "type": "string"
+        },
         "func_name": {
           "type": "string"
         },
@@ -690,6 +697,9 @@ func init() {
         },
         "params": {
           "type": "string"
+        },
+        "prefetch": {
+          "type": "boolean"
         },
         "ssId": {
           "type": "string"
@@ -1540,9 +1550,13 @@ func init() {
     "Function": {
       "type": "object",
       "required": [
+        "func_lang",
         "func_name"
       ],
       "properties": {
+        "func_lang": {
+          "type": "string"
+        },
         "func_name": {
           "type": "string"
         },
@@ -1569,6 +1583,9 @@ func init() {
         "enableReap": {
           "type": "boolean"
         },
+        "func_lang": {
+          "type": "string"
+        },
         "func_name": {
           "type": "string"
         },
@@ -1593,6 +1610,9 @@ func init() {
         },
         "params": {
           "type": "string"
+        },
+        "prefetch": {
+          "type": "boolean"
         },
         "ssId": {
           "type": "string"

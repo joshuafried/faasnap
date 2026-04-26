@@ -19,6 +19,10 @@ import (
 // swagger:model Function
 type Function struct {
 
+	// func lang
+	// Required: true
+	FuncLang *string `json:"func_lang"`
+
 	// func name
 	// Required: true
 	FuncName *string `json:"func_name"`
@@ -40,6 +44,10 @@ type Function struct {
 func (m *Function) Validate(formats strfmt.Registry) error {
 	var res []error
 
+	if err := m.validateFuncLang(formats); err != nil {
+		res = append(res, err)
+	}
+
 	if err := m.validateFuncName(formats); err != nil {
 		res = append(res, err)
 	}
@@ -47,6 +55,15 @@ func (m *Function) Validate(formats strfmt.Registry) error {
 	if len(res) > 0 {
 		return errors.CompositeValidationError(res...)
 	}
+	return nil
+}
+
+func (m *Function) validateFuncLang(formats strfmt.Registry) error {
+
+	if err := validate.Required("func_lang", "body", m.FuncLang); err != nil {
+		return err
+	}
+
 	return nil
 }
 

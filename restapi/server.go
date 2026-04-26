@@ -205,6 +205,10 @@ func (s *Server) Serve() (err error) {
 			s.httpServerL = netutil.LimitListener(s.httpServerL, s.ListenLimit)
 		}
 
+		httpServer.ReadTimeout = time.Duration(600 * time.Second)
+		httpServer.WriteTimeout = time.Duration(600 * time.Second)
+		httpServer.SetKeepAlivesEnabled(true)
+
 		if int64(s.CleanupTimeout) > 0 {
 			httpServer.IdleTimeout = s.CleanupTimeout
 		}

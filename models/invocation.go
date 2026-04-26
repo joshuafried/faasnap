@@ -22,6 +22,9 @@ type Invocation struct {
 	// enable reap
 	EnableReap bool `json:"enableReap,omitempty"`
 
+	// func lang
+	FuncLang string `json:"func_lang,omitempty"`
+
 	// func name
 	// Required: true
 	FuncName *string `json:"func_name"`
@@ -43,6 +46,9 @@ type Invocation struct {
 
 	// params
 	Params string `json:"params,omitempty"`
+
+	// prefetch
+	Prefetch bool `json:"prefetch,omitempty"`
 
 	// ss Id
 	SsID string `json:"ssId,omitempty"`

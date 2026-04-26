@@ -3,6 +3,7 @@
 ## Properties
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
+**func_lang** | **str** |  | 
 **func_name** | **str** |  | 
 **image** | **str** |  | [optional] 
 **kernel** | **str** |  | [optional] 

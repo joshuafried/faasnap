@@ -3,6 +3,7 @@
 ## Properties
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
+**func_lang** | **str** |  | [optional] 
 **func_name** | **str** |  | 
 **vm_id** | **str** |  | [optional] 
 **ss_id** | **str** |  | [optional] 
@@ -17,6 +18,7 @@ Name | Type | Description | Notes
 **enable_reap** | **bool** |  | [optional] 
 **ws_file_direct_io** | **bool** |  | [optional] 
 **ws_single_read** | **bool** |  | [optional] 
+**prefetch** | **bool** |  | [optional] 
 **namespace** | **str** |  | [optional] 
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)
