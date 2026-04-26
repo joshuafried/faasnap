@@ -82,8 +82,8 @@ Type=simple
 Restart=always
 RestartSec=1
 User=root
-Environment="FLASK_APP=/app/daemon.py"
-ExecStart=/app/simple_server.py
+WorkingDirectory=/app/python/
+ExecStart=/app/python/simple_server.py
 [Install]
 WantedBy=multi-user.target
 EOF
@@ -117,6 +117,7 @@ EOF
 # Restart=always
 # RestartSec=1
 # User=root
+# WorkingDirectory=/app/java
 # ExecStart=/usr/bin/java -cp "$JAVA_DEPS" SimpleServer
 # [Install]
 # WantedBy=multi-user.target
