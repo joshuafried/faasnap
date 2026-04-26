@@ -12,8 +12,6 @@ mkdir -p ./mountpoint
 cp $IN $TMPOUT
 
 sudo mount $TMPOUT mountpoint
-sudo mkdir mountpoint/app
-sudo cp -r guest/* mountpoint/app/
 
 sudo umount mountpoint
 mv $TMPOUT $OUT

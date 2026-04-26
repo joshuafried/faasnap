@@ -4,20 +4,6 @@ set -ex
 echo "debian" > /etc/hostname
 echo root:rootroot | chpasswd
 
-
-echo deb http://archive.ubuntu.com/ubuntu noble universe >> /etc/apt/sources.list
-apt update
-apt install -y nodejs libgl1 gfortran ruby php-cli python3-pil libopenblas-dev
-
-apt update
-apt install -y openssh-server build-essential gpg wget libblas3 liblapack3 liblapack-dev libblas-dev gfortran libffi-dev python3.12 python3-pip
-wget https://github.com/Kitware/CMake/releases/download/v3.22.2/cmake-3.22.2-linux-x86_64.tar.gz -O /opt/cmake-3.22.2-linux-x86_64.tar.gz
-pushd /opt
-tar xzvf cmake-3.22.2-linux-x86_64.tar.gz
-export PATH=$PATH:/opt/cmake-3.22.2-linux-x86_64/bin/
-popd
-# apt install -y tcpdump build-essential pkg-config python3-setuptools python-dev python3-dev gcc libpq-dev python-pip python3-dev python3-pip python3-venv python3-wheel
-MAKEFLAGS="-j54" pip3 install --break-system-packages wheel six scikit-learn flask pillow pyaes chameleon pandas tensorflow torch torchvision minio psutil keras-preprocessing keras-applications opencv-python
 mkdir -p /etc/systemd/system/serial-getty@ttyS0.service.d/
 cat <<EOF > /etc/systemd/system/serial-getty@ttyS0.service.d/autologin.conf
 [Service]
@@ -51,7 +37,41 @@ EOF
 chmod 644 /etc/systemd/system/init-entropy.service
 systemctl enable init-entropy.service
 
-cat <<EOF > /etc/systemd/system/function-daemon.service
+cat <<EOF >> /etc/sysctl.conf
+net.ipv6.conf.all.disable_ipv6 = 1
+net.ipv6.conf.default.disable_ipv6 = 1
+net.ipv6.conf.lo.disable_ipv6 = 1
+EOF
+
+pushd /app/simple_server
+./gradlew build
+JAVA_DEPS=$(cat deps.out)
+popd
+
+pushd /app/helloworld
+./gradlew build
+JAVA_DEPS=${JAVA_DEPS}:$(cat deps.out)
+popd
+
+pushd /app/image_rotate_s3
+./gradlew build
+JAVA_DEPS=${JAVA_DEPS}:$(cat deps.out)
+popd
+
+pushd /ap/matmul
+./gradlew build
+JAVA_DEPS=${JAVA_DEPS}:$(cat deps.out)
+popd
+
+pkill java
+sleep 1
+
+pushd /app/node
+npm install minio sharp fs util path
+popd
+
+
+cat <<EOF > /etc/systemd/system/python-daemon.service
 [Unit]
 Description=Serverless function daemon
 Wants=init-entropy.service
@@ -63,16 +83,44 @@ Restart=always
 RestartSec=1
 User=root
 Environment="FLASK_APP=/app/daemon.py"
-ExecStart=python3 -m flask run --host=172.16.0.2
+ExecStart=/app/simple_server.py
 [Install]
 WantedBy=multi-user.target
 EOF
 
-cat <<EOF >> /etc/sysctl.conf
-net.ipv6.conf.all.disable_ipv6 = 1
-net.ipv6.conf.default.disable_ipv6 = 1
-net.ipv6.conf.lo.disable_ipv6 = 1
-EOF
+# cat <<EOF > /etc/systemd/system/node-daemon.service
+# [Unit]
+# Description=Serverless function node daemon
+# Wants=init-entropy.service
+# After=init-entropy.service
+# StartLimitIntervalSec=0
+# [Service]
+# Type=simple
+# Restart=always
+# RestartSec=1
+# User=root
+# WorkingDirectory=/app/node
+# Environment="NODE_PATH=/app/node/node_modules:/app/node/node_modules_addon"
+# ExecStart=chrt -f 99 /usr/bin/node /app/node/server.js
+# [Install]
+# WantedBy=multi-user.target
+# EOF
+
+# cat <<EOF > /etc/systemd/system/java-daemon.service
+# [Unit]
+# Description=Java serverless function daemon
+# Wants=init-entropy.service
+# After=init-entropy.service
+# StartLimitIntervalSec=0
+# [Service]
+# Type=simple
+# Restart=always
+# RestartSec=1
+# User=root
+# ExecStart=/usr/bin/java -cp "$JAVA_DEPS" SimpleServer
+# [Install]
+# WantedBy=multi-user.target
+# EOF
 
 # cat <<EOF >> /etc/rsyslog.conf
 # *.*    -/dev/shm/syslog
@@ -86,9 +134,15 @@ echo "tmpfs /tmp tmpfs defaults,nosuid,nodev 0 0" >> /etc/fstab
 
 ln -s /dev/shm /usr/tmp
 
-chmod 644 /etc/systemd/system/function-daemon.service
-systemctl enable function-daemon.service
-systemctl enable systemd-networkd
+chmod 644 /etc/systemd/system/python-daemon.service
+# chmod 644 /etc/systemd/system/node-daemon.service
+# chmod 644 /etc/systemd/system/java-daemon.service
 
+
+systemctl enable python-daemon.service
+# systemctl enable node-daemon.service
+# systemctl enable java-daemon.service
+
+systemctl enable systemd-networkd
 systemctl disable systemd-timesyncd.service
 systemctl disable systemd-update-utmp.service
