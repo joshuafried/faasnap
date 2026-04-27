@@ -30,3 +30,5 @@ rootfs/guest/python
 rootfs/guest/node
 rootfs/guest/java
 snapshots
+
+rootfs/guest/data
