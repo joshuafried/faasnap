@@ -24,7 +24,7 @@ def run(cmd, quiet=False):
 
 def serve():
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.bind(('172.16.0.2', 5000))
+    sock.bind(('0.0.0.0', 5000))
     sock.listen()
     func_args = None
     while True:
