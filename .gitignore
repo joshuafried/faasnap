@@ -22,6 +22,11 @@ main
 # Swagger generated
 kernel
 
-swagger-codegen-cli-2.4.26.jar 
+swagger-codegen-cli-2.4.26.jar
 config.json
 results
+
+rootfs/guest/python
+rootfs/guest/node
+rootfs/guest/java
+snapshots
