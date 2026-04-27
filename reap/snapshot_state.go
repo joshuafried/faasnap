@@ -322,7 +322,12 @@ func (s *SnapshotState) pollUserPageFaults(ctx context.Context, readyCh chan int
 			logger.Debug("Handler received a signal to quit")
 			return
 		default:
-			nevents, err := syscall.EpollWait(s.epfd, events[:], 50)
+			nevents, err := syscall.EpollWait(s.epfd, events[:], 1000)
+
+			if nevents == 0 {
+				continue
+			}
+
 			if err != nil {
 				if err == syscall.EINTR {
 					continue // Retry if interrupted

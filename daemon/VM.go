@@ -447,12 +447,12 @@ func (vc *VMController) LoadSnapshot(r *http.Request, snapshot *Snapshot, invoc 
 	// invoc.Async
 
 	if snapshot.mincoreLayers != nil {
-		if invoc.WsSingleRead && invoc.UseWsFile && invoc.Prefetch {
+		if invoc.WsSingleRead && invoc.UseWsFile {
 			wg.Add(1)
 		}
 		go func() {
 			if invoc.UseWsFile {
-				if invoc.WsSingleRead && invoc.Prefetch {
+				if invoc.WsSingleRead {
 					defer wg.Done()
 				}
 				snapshot.loadOnce.Do(func() {
@@ -468,7 +468,7 @@ func (vc *VMController) LoadSnapshot(r *http.Request, snapshot *Snapshot, invoc 
 				})
 			}
 		}()
-		if invoc.WsSingleRead && invoc.UseWsFile && invoc.Prefetch {
+		if invoc.WsSingleRead && invoc.UseWsFile {
 			wg.Wait()
 		}
 	}
@@ -745,6 +745,10 @@ func (vc *VMController) InvokeFunction(r *http.Request, vmID string, lang string
 
 	addr := vm.VMNetwork.uniqueAddr + ":" + langDict[lang]
 	conn, err := net.Dial("tcp", addr)
+	if err != nil {
+		log.Printf("Failed to dial VM socket %v %v\n", addr, err)
+		return "", err
+	}
 
 	to_send := []byte(params)
 	to_send = append(to_send, '\n')
