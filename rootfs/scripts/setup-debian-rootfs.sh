@@ -43,22 +43,17 @@ net.ipv6.conf.default.disable_ipv6 = 1
 net.ipv6.conf.lo.disable_ipv6 = 1
 EOF
 
-pushd /app/simple_server
+pushd /app/java/simple_server
 ./gradlew build
 JAVA_DEPS=$(cat deps.out)
 popd
 
-pushd /app/helloworld
+pushd /app/java/image_rotate_s3
 ./gradlew build
 JAVA_DEPS=${JAVA_DEPS}:$(cat deps.out)
 popd
 
-pushd /app/image_rotate_s3
-./gradlew build
-JAVA_DEPS=${JAVA_DEPS}:$(cat deps.out)
-popd
-
-pushd /ap/matmul
+pushd /app/java/matmul
 ./gradlew build
 JAVA_DEPS=${JAVA_DEPS}:$(cat deps.out)
 popd
@@ -83,7 +78,7 @@ Restart=always
 RestartSec=1
 User=root
 WorkingDirectory=/app/python/
-ExecStart=/app/python/simple_server.py
+ExecStart=/app/python/bin/python3 /app/python/simple_server.py
 [Install]
 WantedBy=multi-user.target
 EOF

@@ -15,8 +15,8 @@ cp $IN $TMPOUT
 
 sudo mount $TMPOUT mountpoint
 
-sudo mkdir mountpoint/app
-sduo cp -r guest/* mountpoint/app/
+sudo mkdir -p mountpoint/app
+sudo cp -r guest/* mountpoint/app/
 
 sudo mount --bind /dev ./mountpoint/dev
 sudo mount --bind /proc ./mountpoint/proc
