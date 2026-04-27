@@ -66,57 +66,60 @@ npm install minio sharp fs util path
 popd
 
 
-cat <<EOF > /etc/systemd/system/python-daemon.service
+cat <<EOF > /etc/systemd/system/lang-daemon.service
 [Unit]
-Description=Serverless function daemon
+Description=Serverless function language selector
 Wants=init-entropy.service
 After=init-entropy.service
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/app/
+ExecStart=/app/python/bin/python3 /app/lang-selector.py
+[Install]
+WantedBy=multi-user.target
+EOF
+
+
+cat <<EOF > /etc/systemd/system/python-daemon.service
+[Unit]
+Description=Serverless function Python daemon
 StartLimitIntervalSec=0
 [Service]
-Type=simple
-Restart=always
-RestartSec=1
+Type=oneshot
 User=root
-WorkingDirectory=/app/python/
+WorkingDirectory=/app/python
 ExecStart=/app/python/bin/python3 /app/python/simple_server.py
 [Install]
 WantedBy=multi-user.target
 EOF
 
-# cat <<EOF > /etc/systemd/system/node-daemon.service
-# [Unit]
-# Description=Serverless function node daemon
-# Wants=init-entropy.service
-# After=init-entropy.service
-# StartLimitIntervalSec=0
-# [Service]
-# Type=simple
-# Restart=always
-# RestartSec=1
-# User=root
-# WorkingDirectory=/app/node
-# Environment="NODE_PATH=/app/node/node_modules:/app/node/node_modules_addon"
-# ExecStart=chrt -f 99 /usr/bin/node /app/node/server.js
-# [Install]
-# WantedBy=multi-user.target
-# EOF
+cat <<EOF > /etc/systemd/system/node-daemon.service
+[Unit]
+Description=Serverless function Node daemon
+StartLimitIntervalSec=0
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/app/node
+Environment="NODE_PATH=/app/node/node_modules:/app/node/node_modules_addon"
+ExecStart=chrt -f 99 /usr/bin/node /app/node/server.js
+[Install]
+WantedBy=multi-user.target
+EOF
 
-# cat <<EOF > /etc/systemd/system/java-daemon.service
-# [Unit]
-# Description=Java serverless function daemon
-# Wants=init-entropy.service
-# After=init-entropy.service
-# StartLimitIntervalSec=0
-# [Service]
-# Type=simple
-# Restart=always
-# RestartSec=1
-# User=root
-# WorkingDirectory=/app/java
-# ExecStart=/usr/bin/java -cp "$JAVA_DEPS" SimpleServer
-# [Install]
-# WantedBy=multi-user.target
-# EOF
+cat <<EOF > /etc/systemd/system/java-daemon.service
+[Unit]
+Description=Java serverless function daemon
+StartLimitIntervalSec=0
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/app/java
+ExecStart=chrt -f 99 /usr/bin/java -cp "$JAVA_DEPS" SimpleServer
+[Install]
+WantedBy=multi-user.target
+EOF
 
 # cat <<EOF >> /etc/rsyslog.conf
 # *.*    -/dev/shm/syslog
@@ -130,14 +133,13 @@ echo "tmpfs /tmp tmpfs defaults,nosuid,nodev 0 0" >> /etc/fstab
 
 ln -s /dev/shm /usr/tmp
 
+chmod 644 /etc/systemd/system/lang-daemon.service
 chmod 644 /etc/systemd/system/python-daemon.service
-# chmod 644 /etc/systemd/system/node-daemon.service
-# chmod 644 /etc/systemd/system/java-daemon.service
+chmod 644 /etc/systemd/system/node-daemon.service
+chmod 644 /etc/systemd/system/java-daemon.service
 
-
-systemctl enable python-daemon.service
-# systemctl enable node-daemon.service
-# systemctl enable java-daemon.service
+systemctl enable lang-daemon.service
+# per-language services are started by lang-selector, not on boot
 
 systemctl enable systemd-networkd
 systemctl disable systemd-timesyncd.service

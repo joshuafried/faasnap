@@ -404,7 +404,6 @@ func InvokeFunction(req *http.Request, invoc *models.Invocation) (string, string
 				log.Println("Snapshot start invocation failed")
 				return "", "", traceId, err
 			}
-			restored = true
 		}
 	default:
 		// cold start

@@ -744,12 +744,27 @@ func (vc *VMController) InvokeFunction(r *http.Request, vmID string, lang string
 	defer span.End()
 
 	addr := vm.VMNetwork.uniqueAddr + ":" + langDict[lang]
-	conn, err := net.Dial("tcp", addr)
-	if err != nil {
-		log.Printf("Failed to dial VM socket %v %v\n", addr, err)
-		return "", err
-	}
+	log.Println("Dialing", addr)
+	var (
+		conn net.Conn
+		err  error
+	)
 
+	_, dial_span := trace.StartSpan(r.Context(), "lang_dial")
+	for delay := 1; delay < 32; delay *= 2 {
+		for i := 0; i < 100; i++ {
+			conn, err = net.Dial("tcp", addr)
+			if err == nil {
+				goto langConnected
+			}
+			time.Sleep(time.Duration(delay) * time.Millisecond)
+		}
+	}
+	log.Printf("Failed to dial VM socket %v %v\n", addr, err)
+	return "", err
+langConnected:
+
+	dial_span.End()
 	to_send := []byte(params)
 	to_send = append(to_send, '\n')
 	_, err = conn.Write(to_send)

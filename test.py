@@ -7,6 +7,7 @@ import shutil
 import socket
 import subprocess
 import sys
+import tempfile
 import time
 from collections import defaultdict
 from datetime import datetime
@@ -76,6 +77,7 @@ clients = {}
 
 def prepareVanilla(params, client: DefaultApi, setting, func, func_param, par_snap):
     all_snaps = []
+    _set_lang_marker(func.lang, params.faasnap.images.debian)
     vm = client.vms_post(vm={"func_name": func.name, "namespace": "fc%d" % 1})
     time.sleep(5)
     invoc = faasnap.Invocation(
@@ -113,6 +115,14 @@ def prepareVanilla(params, client: DefaultApi, setting, func, func_param, par_sn
     return [snap.ss_id for snap in all_snaps]
 
 
+def _set_lang_marker(lang, rootfs_path):
+    with tempfile.TemporaryDirectory() as mnt:
+        subprocess.run(["mount", rootfs_path, mnt], check=True)
+        with open(os.path.join(mnt, "lang-select"), "w") as f:
+            f.write(lang)
+        subprocess.run(["umount", mnt], check=True)
+
+
 def prepareMincore(
     params,
     client: DefaultApi,
@@ -124,8 +134,10 @@ def prepareMincore(
     restore_only=False,
 ):
     all_snaps = []
+    _set_lang_marker(func.lang, params.faasnap.images.debian)
+    time.sleep(1)
     vm = client.vms_post(vm={"func_name": func.name, "namespace": "fc%d" % 1})
-    time.sleep(5)
+    time.sleep(10)
 
     snapshot_path = params.test_dir + "/Full.snapshot"
     mem_file_path = params.test_dir + "/Full.memfile"
@@ -243,8 +255,9 @@ def prepareReap(
     snapshot_only=False,
     restore_only=False,
 ):
+    _set_lang_marker(func.lang, params.faasnap.images.debian)
     vm = client.vms_post(vm={"func_name": func.name, "namespace": "fc%d" % idx})
-    time.sleep(5)
+    time.sleep(10)
     invoc = faasnap.Invocation(
         func_lang=func.lang,
         func_name=func.name,
@@ -321,6 +334,7 @@ def prepareReap(
 
 
 def prepareEmuMincore(params, client: DefaultApi, setting, func, func_param):
+    _set_lang_marker(func.lang, params.faasnap.images.debian)
     vm = client.vms_post(vm={"func_name": func.name, "namespace": "fc%d" % 1})
     time.sleep(5)
     invoc = faasnap.Invocation(
@@ -686,6 +700,7 @@ def run_warm(params, setting, par, par_snap, func, record_input, test_input):
     params1 = func.params[test_input]
 
     vms = {}
+    _set_lang_marker(func.lang, params.faasnap.images.debian)
     for idx in range(1, 1 + par):
         vms[idx] = clients[idx].vms_post(
             vm={"func_name": func.name, "namespace": "fc%d" % idx}
