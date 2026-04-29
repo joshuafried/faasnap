@@ -55,6 +55,26 @@ def cleanup():
 atexit.register(cleanup)
 
 
+def wait_for_daemon(snappipe, host="127.0.0.1", port=8080, timeout=60.0):
+    """Block until the faasnap daemon accepts TCP on (host, port).
+    Raises RuntimeError if the daemon dies or the timeout is reached."""
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        rc = snappipe.poll()
+        if rc is not None:
+            raise RuntimeError(
+                f"faasnap daemon exited with code {rc} before accepting connections"
+            )
+        try:
+            with socket.create_connection((host, port), timeout=1.0):
+                return
+        except (ConnectionRefusedError, socket.timeout, OSError):
+            time.sleep(0.1)
+    raise RuntimeError(
+        f"faasnap daemon did not accept connections on {host}:{port} within {timeout}s"
+    )
+
+
 def addNetwork(client: DefaultApi, idx: int):
     ns = "fc%d" % idx
     guest_mac = "AA:FC:00:00:00:01"  # fixed MAC
@@ -510,22 +530,34 @@ def run_snap(
     global clients
     # start faasnap
     snappipe = subprocess.Popen(
-        ["./main", "--port=8080", "--host=0.0.0.0"],
+        ["./main", "--port=8080", "--host=0.0.0.0", "--cleanup-timeout=300s"],
         cwd=params.home_dir,
         stdout=open("%s/%s/stdout" % (RESULT_DIR, TESTID), "a+")
         if RESULT_DIR
         else open("/tmp/faasnap-stdout", "a+"),
         stderr=subprocess.STDOUT,
     )
-    time.sleep(10)
+    wait_for_daemon(snappipe)
     # set up
+    retry = urllib3.util.Retry(
+        total=5,
+        connect=5,
+        read=5,
+        backoff_factor=0.2,
+        status_forcelist=(502, 503, 504),
+        # retry POST/PUT on connection errors too: the daemon closes idle
+        # keep-alive connections after CleanupTimeout, so a reused-but-stale
+        # socket can RemoteDisconnect before the request is processed.
+        allowed_methods=None,
+    )
     keepalive_pool = urllib3.PoolManager(
+        retries=retry,
         socket_options=[
             (socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1),
             (socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 1),
             (socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 3),
             (socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 5),
-        ]
+        ],
     )
 
     api_client = faasnap.ApiClient(conf)
@@ -673,14 +705,14 @@ def invoke_warm(args):
 def run_warm(params, setting, par, par_snap, func, record_input, test_input):
     client: DefaultApi
     snappipe = subprocess.Popen(
-        ["./main", "--port=8080", "--host=0.0.0.0"],
+        ["./main", "--port=8080", "--host=0.0.0.0", "--cleanup-timeout=300s"],
         cwd=params.home_dir,
         stdout=open("%s/%s/stdout" % (RESULT_DIR, TESTID), "a+")
         if RESULT_DIR
         else open("/tmp/faasnap-stdout", "a+"),
         stderr=subprocess.STDOUT,
     )
-    time.sleep(2)
+    wait_for_daemon(snappipe)
     # set up
     for idx in range(1, 1 + par):
         clients[idx] = faasnap.DefaultApi(faasnap.ApiClient(conf))
