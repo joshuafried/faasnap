@@ -1,4 +1,5 @@
 .PHONY: all clean
+.INTERMEDIATE: debian-base-rootfs.ext4 debian-deps-rootfs.ext4 debian-provisioned-rootfs.ext4
 
 DIST=debian
 DEBIAN_VERSION=noble

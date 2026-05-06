@@ -9,7 +9,7 @@ TMPOUT=.$OUT
 sudo umount ./mountpoint || true
 sudo rm -rf ./mountpoint
 mkdir -p ./mountpoint
-cp $IN $TMPOUT
+mv $IN $TMPOUT
 
 sudo mount $TMPOUT mountpoint
 
