@@ -2,16 +2,18 @@
 
 set -ex
 
-IN=debian-provisioned-rootfs.ext4
-OUT=debian-rootfs.ext4
-TMPOUT=.$OUT
+OUTDIR=${OUTDIR:-.}
+MNT=$OUTDIR/mountpoint
+IN=$OUTDIR/debian-provisioned-rootfs.ext4
+OUT=$OUTDIR/debian-rootfs.ext4
+TMPOUT=$OUTDIR/.debian-rootfs.ext4
 
-sudo umount ./mountpoint || true
-sudo rm -rf ./mountpoint
-mkdir -p ./mountpoint
+sudo umount $MNT || true
+sudo rm -rf $MNT
+mkdir -p $MNT
 mv $IN $TMPOUT
 
-sudo mount $TMPOUT mountpoint
+sudo mount $TMPOUT $MNT
 
-sudo umount mountpoint
+sudo umount $MNT
 mv $TMPOUT $OUT

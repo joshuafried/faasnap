@@ -1,32 +1,34 @@
 #! /usr/bin/env bash
 set -ex
 
-IN=debian-deps-rootfs.ext4
-OUT=debian-provisioned-rootfs.ext4
-TMPOUT=.$OUT
+OUTDIR=${OUTDIR:-.}
+MNT=$OUTDIR/mountpoint
+IN=$OUTDIR/debian-deps-rootfs.ext4
+OUT=$OUTDIR/debian-provisioned-rootfs.ext4
+TMPOUT=$OUTDIR/.debian-provisioned-rootfs.ext4
 
-sudo umount ./mountpoint/dev || true
-sudo umount ./mountpoint/sys || true
-sudo umount ./mountpoint/proc || true
-sudo umount ./mountpoint || true
-sudo rm -rf ./mountpoint
-mkdir -p ./mountpoint
+sudo umount $MNT/dev || true
+sudo umount $MNT/sys || true
+sudo umount $MNT/proc || true
+sudo umount $MNT || true
+sudo rm -rf $MNT
+mkdir -p $MNT
 mv $IN $TMPOUT
 
-sudo mount $TMPOUT mountpoint
+sudo mount $TMPOUT $MNT
 
-sudo mkdir -p mountpoint/app
-sudo cp -r guest/* mountpoint/app/
+sudo mkdir -p $MNT/app
+sudo cp -r guest/* $MNT/app/
 
-sudo mount --bind /dev ./mountpoint/dev
-sudo mount --bind /proc ./mountpoint/proc
-sudo mount --bind /sys ./mountpoint/sys
+sudo mount --bind /dev $MNT/dev
+sudo mount --bind /proc $MNT/proc
+sudo mount --bind /sys $MNT/sys
 
-sudo cp scripts/setup-debian-rootfs.sh mountpoint/
-sudo chroot mountpoint /bin/bash /setup-debian-rootfs.sh
+sudo cp scripts/setup-debian-rootfs.sh $MNT/
+sudo chroot $MNT /bin/bash /setup-debian-rootfs.sh
 
-sudo umount ./mountpoint/dev
-sudo umount ./mountpoint/sys
-sudo umount ./mountpoint/proc
-sudo umount mountpoint
+sudo umount $MNT/dev
+sudo umount $MNT/sys
+sudo umount $MNT/proc
+sudo umount $MNT
 mv $TMPOUT $OUT
