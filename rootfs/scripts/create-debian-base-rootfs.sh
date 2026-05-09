@@ -10,10 +10,10 @@ OUT=$OUTDIR/debian-base-rootfs.ext4
 sudo umount $MNT || true
 sudo rm -rf $MNT
 mkdir -p $MNT
-dd if=/dev/zero of=$TMPOUT bs=2M count=16384
+truncate -s 32G $TMPOUT
 mkfs.ext4 $TMPOUT
 
-sudo mount $TMPOUT $MNT
+sudo mount -o loop,discard $TMPOUT $MNT
 sudo debootstrap --arch=amd64 $DEBIAN_VERSION $MNT http://archive.ubuntu.com/ubuntu/
 
 sudo umount $MNT

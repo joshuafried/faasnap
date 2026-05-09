@@ -15,7 +15,7 @@ sudo umount $MNT || true
 sudo rm -rf $MNT
 mkdir -p $MNT
 mv $IN $TMPOUT
-sudo mount $TMPOUT $MNT
+sudo mount -o loop,discard $TMPOUT $MNT
 sudo mount --bind /dev $MNT/dev
 sudo mount --bind /proc $MNT/proc
 sudo mount --bind /sys $MNT/sys
